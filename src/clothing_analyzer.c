@@ -859,10 +859,13 @@ static LowerShape lower_shape_metrics(const Image *image, Rect lower, double cov
     return shape;
 }
 
-static const char *lower_garment_from_shape(const char *pants_length, double coverage, double lower_skin_ratio, LowerShape shape)
+static const char *lower_garment_from_shape(const char *pants_length, double coverage, double upper_skin_ratio, double lower_skin_ratio, LowerShape shape)
 {
     if (strcmp(pants_length, "shorts") == 0) {
         if (shape.center_fill_ratio > 0.58 && shape.split_ratio < 0.08) {
+            if (shape.center_fill_ratio > 0.94 && upper_skin_ratio > 0.29) {
+                return "mini_skirt";
+            }
             /* Raised/sideways legs in short pants fill the center like a skirt but leave high visible skin. */
             if (coverage > 0.92 && lower_skin_ratio > 0.23 && lower_skin_ratio < 0.58) {
                 return "shorts";
@@ -1016,7 +1019,7 @@ ClothingAnalysis analyze_clothing(const Image *image)
     result.upper_color = dominant_color(image, upper, skin_gain);
     result.lower_color = dominant_color(image, lower, skin_gain);
     result.pants_length = pants_length_from_coverage(coverage, skin_lower, skin_reach);
-    result.lower_garment = lower_garment_from_shape(result.pants_length, coverage, skin_lower, lower_shape);
+    result.lower_garment = lower_garment_from_shape(result.pants_length, coverage, skin_upper, skin_lower, lower_shape);
     result.exposure = exposure_from_skin(skin_total, skin_upper, skin_lower);
     result.skin_ratio = skin_total;
     result.upper_skin_ratio = skin_upper;

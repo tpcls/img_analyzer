@@ -128,6 +128,27 @@ GOLDEN_SAMPLES = [
     },
     {"file": "youtube-only-a94d3c442af11ebeb100fcfa2cf877143298f111-30.jpg", "expected_usable": False},
     {
+        "file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-75.jpg",
+        "expected": {
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+        },
+    },
+    {
+        "file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-90.jpg",
+        "expected": {
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+        },
+    },
+    {
+        "file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-120.jpg",
+        "expected": {
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+        },
+    },
+    {
         "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-30.jpg",
         "expected": {
             "upper_color": "black",
