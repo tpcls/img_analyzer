@@ -1,5 +1,6 @@
 import express from 'express';
 import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -43,27 +44,37 @@ app.use('/analyze', (req, res, next) => {
 });
 
 app.post('/analyze', async (req, res) => {
+  const requestId = crypto.randomUUID();
   if (activeJobs >= maxJobs) {
-    res.status(429).json({ ok: false, status: 'busy', error: 'analyzer is busy; retry shortly' });
+    console.warn(`[${requestId}] rejected: analyzer busy`);
+    res.status(429).json({ ok: false, status: 'busy', request_id: requestId, error: 'analyzer is busy; retry shortly' });
     return;
   }
 
   const payload = req.body || {};
   if (!payload.url || typeof payload.url !== 'string') {
-    res.status(400).json({ ok: false, status: 'bad_request', error: 'url is required' });
+    console.warn(`[${requestId}] rejected: missing url`);
+    res.status(400).json({ ok: false, status: 'bad_request', request_id: requestId, error: 'url is required' });
     return;
   }
 
   activeJobs += 1;
   const started = performance.now();
+  console.log(`[${requestId}] analyze started url=${payload.url} active_jobs=${activeJobs}/${maxJobs}`);
   try {
     const result = await analyzeWithPython(payload);
     result.elapsed_ms = Math.round((performance.now() - started) * 100) / 100;
+    result.request_id = requestId;
+    console.log(`[${requestId}] analyze finished ok=${result.ok} elapsed_ms=${result.elapsed_ms}`);
     res.status(result.ok ? 200 : 502).json(result);
   } catch (error) {
+    const elapsedMs = Math.round((performance.now() - started) * 100) / 100;
+    console.error(`[${requestId}] analyze failed status=${error.status || 'error'} elapsed_ms=${elapsedMs} error=${error.message}`);
     res.status(error.statusCode || 500).json({
       ok: false,
       status: error.status || 'error',
+      request_id: requestId,
+      elapsed_ms: elapsedMs,
       error: error.message,
     });
   } finally {
