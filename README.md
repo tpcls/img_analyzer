@@ -144,6 +144,8 @@ curl -X POST http://localhost:8000/analyze \
 - `person_confidence`: 단일 인물 박스 신뢰도
 - `color_confidence`: 피부색 보정과 조명 상태를 반영한 색상 신뢰도
 - `lower_garment`: 하체 실루엣 분리 기준으로 추정한 하의 종류
+- `lower_garment_vote_confidence`: 여러 프레임 다수결에서 최종 하의 종류가 차지한 표 비율
+- `lower_garment_vote_margin`: 최종 하의 종류와 2위 후보의 표 차이
 - `lower_split_ratio`: 하의가 두 다리 형태로 갈라지는 정도
 - `lower_center_fill_ratio`: 하의 중앙부가 치마처럼 이어져 보이는 정도
 - `analysis_quality`: 사람 박스 품질

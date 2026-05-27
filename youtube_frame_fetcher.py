@@ -579,14 +579,19 @@ class YouTubeFrameFetcher:
                 counts[value] += 1
                 tie_scores[value] += entry["score"]
             if not counts:
-                return "unknown", {}
+                return "unknown", {}, 0.0, 0
             winner = max(counts, key=lambda value: (counts[value], tie_scores[value]))
-            return winner, dict(counts)
+            ordered_counts = sorted(counts.values(), reverse=True)
+            runner_up = ordered_counts[1] if len(ordered_counts) > 1 else 0
+            confidence = counts[winner] / sum(counts.values())
+            return winner, dict(counts), round(confidence, 4), counts[winner] - runner_up
 
         analysis = {}
         votes = {}
+        vote_confidence = {}
+        vote_margin = {}
         for key in ("upper_color", "lower_color", "lower_garment", "pants_length", "exposure"):
-            analysis[key], votes[key] = vote(key)
+            analysis[key], votes[key], vote_confidence[key], vote_margin[key] = vote(key)
 
         analysis["skin_ratio"] = numeric_mean("skin_ratio")
         analysis["upper_skin_ratio"] = numeric_mean("upper_skin_ratio")
@@ -594,6 +599,8 @@ class YouTubeFrameFetcher:
         analysis["lower_coverage_ratio"] = numeric_mean("lower_coverage_ratio")
         analysis["lower_split_ratio"] = numeric_mean("lower_split_ratio")
         analysis["lower_center_fill_ratio"] = numeric_mean("lower_center_fill_ratio")
+        analysis["lower_garment_vote_confidence"] = vote_confidence["lower_garment"]
+        analysis["lower_garment_vote_margin"] = vote_margin["lower_garment"]
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (
@@ -616,6 +623,8 @@ class YouTubeFrameFetcher:
                 "available_frames": len(ranked),
                 "seconds": [entry["item"].get("second") for entry in selected],
                 "votes": votes,
+                "vote_confidence": vote_confidence,
+                "vote_margin": vote_margin,
             },
         }
 
@@ -624,6 +633,8 @@ class YouTubeFrameFetcher:
             warnings.append(f"only {len(selected)} valid frames were available for voting")
         if not result["usable"]:
             warnings.append("aggregated confidence is low; frame set is likely wide/group/poorly lit")
+        if result["usable"] and analysis["lower_garment_vote_confidence"] < 0.60:
+            warnings.append("lower garment vote is weak; add more frames or inspect manually")
         if warnings:
             result["warnings"] = warnings
         return result

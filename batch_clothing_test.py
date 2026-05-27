@@ -59,6 +59,8 @@ def run_case(fetcher, query, seconds, auto_seconds, max_height, min_vote_frames)
             "upper_color": analysis.get("upper_color"),
             "lower_color": analysis.get("lower_color"),
             "lower_garment": analysis.get("lower_garment"),
+            "lower_garment_vote_confidence": analysis.get("lower_garment_vote_confidence"),
+            "lower_garment_vote_margin": analysis.get("lower_garment_vote_margin"),
             "pants_length": analysis.get("pants_length"),
             "exposure": analysis.get("exposure"),
             "person_confidence": analysis.get("person_confidence"),

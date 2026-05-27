@@ -116,6 +116,8 @@ def main():
                     "lower_coverage_ratio": analysis.get("lower_coverage_ratio"),
                     "lower_split_ratio": analysis.get("lower_split_ratio"),
                     "lower_center_fill_ratio": analysis.get("lower_center_fill_ratio"),
+                    "lower_garment_vote_confidence": analysis.get("lower_garment_vote_confidence"),
+                    "lower_garment_vote_margin": analysis.get("lower_garment_vote_margin"),
                 },
                 "votes": {
                     "lower_garment": (aggregation.get("votes") or {}).get("lower_garment", {}),
