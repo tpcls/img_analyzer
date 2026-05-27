@@ -98,7 +98,7 @@ Linux에서는 `./build_linux.sh`가 C 바이너리, Python venv, Node 의존성
 GCP e2-micro에서 서버를 열 때:
 
 ```sh
-API_KEY='change-this-secret' HOST=0.0.0.0 PORT=8000 npm start
+SERV_API_API='change-this-secret' HOST=0.0.0.0 PORT=8000 npm start
 ```
 
 GCP 방화벽에서 TCP `8000`을 허용한 뒤 내 컴퓨터에서 호출합니다.
@@ -133,7 +133,7 @@ curl -X POST http://localhost:8000/analyze \
 - `PYTHON_BIN`: 사용할 Python 경로. 기본값 `.venv/bin/python`
 - `MAX_JOBS`: 동시에 처리할 분석 작업 수. 기본값 `1`
 - `REQUEST_TIMEOUT_MS`: 요청 타임아웃. 기본값 `900000`
-- `API_KEY`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
+- `SERV_API_API`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
 
 - `usable`: 분석 결과를 실제로 써도 되는지 여부
 - `person_confidence`: 단일 인물 박스 신뢰도

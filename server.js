@@ -13,7 +13,7 @@ const pythonBin = process.env.PYTHON_BIN || path.join(__dirname, '.venv', 'bin',
 const maxJobs = Math.max(1, Number(process.env.MAX_JOBS || 1));
 const requestTimeoutMs = Math.max(10_000, Number(process.env.REQUEST_TIMEOUT_MS || 900_000));
 const maxBodyBytes = process.env.MAX_BODY_BYTES || '16kb';
-const apiKey = process.env.API_KEY || '';
+const apiKey = process.env.SERV_API_API || '';
 
 let activeJobs = 0;
 
