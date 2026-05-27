@@ -156,6 +156,14 @@ curl -X POST http://localhost:8000/analyze \
 .venv/bin/python batch_clothing_test.py
 ```
 
+캐시된 프레임의 하의 판별을 눈으로 검수하려면:
+
+```sh
+.venv/bin/python lower_garment_audit.py
+```
+
+이 명령은 `eval_outputs/lower_garment_audit.jpg`와 `eval_outputs/lower_garment_audit.json`을 생성합니다.
+
 ## Performance Benchmark
 
 ```sh
