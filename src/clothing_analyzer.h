@@ -12,12 +12,15 @@ typedef struct {
 typedef struct {
     const char *upper_color;
     const char *lower_color;
+    const char *lower_garment;
     const char *pants_length;
     const char *exposure;
     double skin_ratio;
     double upper_skin_ratio;
     double lower_skin_ratio;
     double lower_coverage_ratio;
+    double lower_split_ratio;
+    double lower_center_fill_ratio;
     double person_confidence;
     double color_confidence;
     const char *analysis_quality;

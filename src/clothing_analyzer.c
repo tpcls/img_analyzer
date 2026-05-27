@@ -25,6 +25,11 @@ typedef struct {
     double b;
 } ColorGain;
 
+typedef struct {
+    double split_ratio;
+    double center_fill_ratio;
+} LowerShape;
+
 static int weighted_quantile(const double *values, int n, double q)
 {
     double total = 0.0;
@@ -780,6 +785,109 @@ static const char *pants_length_from_coverage(double coverage, double lower_skin
     return "long";
 }
 
+static LowerShape lower_shape_metrics(const Image *image, Rect lower, double coverage)
+{
+    int h = lower.y1 - lower.y0 + 1;
+    int w = lower.x1 - lower.x0 + 1;
+    int x1 = lower.x0 + w / 3;
+    int x2 = lower.x0 + (w * 2) / 3;
+    double clamped_coverage = coverage;
+    int y0 = lower.y0 + (int)(h * 0.18);
+    int y1;
+    int usable_rows = 0;
+    int split_rows = 0;
+    int center_fill_rows = 0;
+
+    if (clamped_coverage < 0.0) {
+        clamped_coverage = 0.0;
+    } else if (clamped_coverage > 1.0) {
+        clamped_coverage = 1.0;
+    }
+    y1 = lower.y0 + (int)(h * clamped_coverage * 0.98);
+
+    if (y1 <= y0) {
+        y1 = lower.y1;
+    }
+    if (y1 > lower.y1) {
+        y1 = lower.y1;
+    }
+
+    for (int y = y0; y <= y1; y++) {
+        int left_cloth = 0;
+        int center_cloth = 0;
+        int right_cloth = 0;
+        int left_total = 0;
+        int center_total = 0;
+        int right_total = 0;
+
+        for (int x = lower.x0; x <= lower.x1; x++) {
+            const unsigned char *p = pixel_at(image, x, y);
+            int is_cloth = clothing_pixel(p) && !is_exposed_skin_pixel(p);
+            if (x < x1) {
+                left_total++;
+                left_cloth += is_cloth;
+            } else if (x <= x2) {
+                center_total++;
+                center_cloth += is_cloth;
+            } else {
+                right_total++;
+                right_cloth += is_cloth;
+            }
+        }
+
+        double left_ratio = left_total ? (double)left_cloth / (double)left_total : 0.0;
+        double center_ratio = center_total ? (double)center_cloth / (double)center_total : 0.0;
+        double right_ratio = right_total ? (double)right_cloth / (double)right_total : 0.0;
+
+        if (left_ratio + center_ratio + right_ratio < 0.20) {
+            continue;
+        }
+        usable_rows++;
+        if (left_ratio > 0.16 && right_ratio > 0.16 && center_ratio < 0.10) {
+            split_rows++;
+        }
+        if (center_ratio > 0.18) {
+            center_fill_rows++;
+        }
+    }
+
+    LowerShape shape = {0.0, 0.0};
+    if (usable_rows > 0) {
+        shape.split_ratio = (double)split_rows / (double)usable_rows;
+        shape.center_fill_ratio = (double)center_fill_rows / (double)usable_rows;
+    }
+    return shape;
+}
+
+static const char *lower_garment_from_shape(const char *pants_length, double coverage, double lower_skin_ratio, LowerShape shape)
+{
+    if (strcmp(pants_length, "shorts") == 0) {
+        if (shape.center_fill_ratio > 0.58 && shape.split_ratio < 0.08) {
+            return "mini_skirt";
+        }
+        return "shorts";
+    }
+    if (strcmp(pants_length, "knee_length") == 0) {
+        if (shape.center_fill_ratio > 0.52 && shape.split_ratio < 0.12) {
+            return "knee_length_skirt";
+        }
+        return "knee_length_pants";
+    }
+    if (strcmp(pants_length, "cropped") == 0) {
+        if (shape.center_fill_ratio > 0.62 && shape.split_ratio < 0.10 && lower_skin_ratio < 0.28) {
+            return "midi_skirt";
+        }
+        return "cropped_pants";
+    }
+    if (strcmp(pants_length, "long") == 0) {
+        if (shape.center_fill_ratio > 0.68 && shape.split_ratio < 0.08 && coverage > 0.82) {
+            return "long_skirt";
+        }
+        return "long_pants";
+    }
+    return "unknown";
+}
+
 static const char *exposure_from_skin(double total, double upper, double lower)
 {
     double score = total * 0.65 + upper * 0.25 + lower * 0.10;
@@ -897,17 +1005,21 @@ ClothingAnalysis analyze_clothing(const Image *image)
     double skin_lower = skin_ratio_in_rect(image, lower);
     double coverage = lower_garment_coverage(image, lower);
     double skin_reach = lower_skin_reach(image, lower);
+    LowerShape lower_shape = lower_shape_metrics(image, lower, coverage);
     ColorGain skin_gain = estimate_skin_gain(image, subject);
 
     ClothingAnalysis result;
     result.upper_color = dominant_color(image, upper, skin_gain);
     result.lower_color = dominant_color(image, lower, skin_gain);
     result.pants_length = pants_length_from_coverage(coverage, skin_lower, skin_reach);
+    result.lower_garment = lower_garment_from_shape(result.pants_length, coverage, skin_lower, lower_shape);
     result.exposure = exposure_from_skin(skin_total, skin_upper, skin_lower);
     result.skin_ratio = skin_total;
     result.upper_skin_ratio = skin_upper;
     result.lower_skin_ratio = skin_lower;
     result.lower_coverage_ratio = coverage;
+    result.lower_split_ratio = lower_shape.split_ratio;
+    result.lower_center_fill_ratio = lower_shape.center_fill_ratio;
     result.person_confidence = estimate_person_confidence(image, subject, skin_total);
     result.color_confidence = clamp01(result.person_confidence * 0.70 + clamp01(skin_total * 4.0) * 0.30);
     result.analysis_quality = quality_from_confidence(result.person_confidence);

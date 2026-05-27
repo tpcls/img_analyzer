@@ -585,13 +585,15 @@ class YouTubeFrameFetcher:
 
         analysis = {}
         votes = {}
-        for key in ("upper_color", "lower_color", "pants_length", "exposure"):
+        for key in ("upper_color", "lower_color", "lower_garment", "pants_length", "exposure"):
             analysis[key], votes[key] = vote(key)
 
         analysis["skin_ratio"] = numeric_mean("skin_ratio")
         analysis["upper_skin_ratio"] = numeric_mean("upper_skin_ratio")
         analysis["lower_skin_ratio"] = numeric_mean("lower_skin_ratio")
         analysis["lower_coverage_ratio"] = numeric_mean("lower_coverage_ratio")
+        analysis["lower_split_ratio"] = numeric_mean("lower_split_ratio")
+        analysis["lower_center_fill_ratio"] = numeric_mean("lower_center_fill_ratio")
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (

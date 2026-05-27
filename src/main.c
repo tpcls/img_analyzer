@@ -15,12 +15,15 @@ static void print_analysis_json(const ClothingAnalysis *result, int indent)
     printf("%s{\n", sp);
     printf("%s  \"upper_color\": \"%s\",\n", sp, result->upper_color);
     printf("%s  \"lower_color\": \"%s\",\n", sp, result->lower_color);
+    printf("%s  \"lower_garment\": \"%s\",\n", sp, result->lower_garment);
     printf("%s  \"pants_length\": \"%s\",\n", sp, result->pants_length);
     printf("%s  \"exposure\": \"%s\",\n", sp, result->exposure);
     printf("%s  \"skin_ratio\": %.4f,\n", sp, result->skin_ratio);
     printf("%s  \"upper_skin_ratio\": %.4f,\n", sp, result->upper_skin_ratio);
     printf("%s  \"lower_skin_ratio\": %.4f,\n", sp, result->lower_skin_ratio);
     printf("%s  \"lower_coverage_ratio\": %.4f,\n", sp, result->lower_coverage_ratio);
+    printf("%s  \"lower_split_ratio\": %.4f,\n", sp, result->lower_split_ratio);
+    printf("%s  \"lower_center_fill_ratio\": %.4f,\n", sp, result->lower_center_fill_ratio);
     printf("%s  \"person_confidence\": %.4f,\n", sp, result->person_confidence);
     printf("%s  \"color_confidence\": %.4f,\n", sp, result->color_confidence);
     printf("%s  \"analysis_quality\": \"%s\",\n", sp, result->analysis_quality);
