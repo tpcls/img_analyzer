@@ -190,12 +190,58 @@ GOLDEN_SEQUENCES = [
     },
 ]
 
+GOLDEN_VIDEO_GROUPS = [
+    {
+        "name": "Karina full cached vote",
+        "prefix": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20",
+        "expected": {"lower_garment": "shorts", "pants_length": "shorts"},
+    },
+    {
+        "name": "Wonyoung full cached vote",
+        "prefix": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473",
+        "expected": {"lower_garment": "mini_skirt", "pants_length": "shorts"},
+    },
+    {
+        "name": "Wide cage full cached vote",
+        "prefix": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb",
+        "expected_usable": False,
+    },
+    {
+        "name": "Laser wide full cached vote",
+        "prefix": "youtube-only-a94d3c442af11ebeb100fcfa2cf877143298f111",
+        "expected_usable": False,
+    },
+    {
+        "name": "Stage black skirt full cached vote",
+        "prefix": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9",
+        "expected": {"lower_garment": "mini_skirt", "pants_length": "shorts"},
+    },
+    {
+        "name": "Stage white shorts full cached vote",
+        "prefix": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d",
+        "expected": {"lower_garment": "shorts", "pants_length": "shorts"},
+    },
+]
+
 
 def is_usable(analysis):
     return (
         float(analysis.get("person_confidence", 0.0)) >= USABLE_PERSON_THRESHOLD
         and float(analysis.get("color_confidence", 0.0)) >= USABLE_COLOR_THRESHOLD
     )
+
+
+def frames_for_prefix(frame_dir, prefix):
+    paths = sorted(
+        frame_dir.glob(f"{prefix}-*.jpg"),
+        key=lambda path: int(path.stem.rsplit("-", 1)[-1]),
+    )
+    if not paths:
+        raise FileNotFoundError(f"No frames found for {prefix}")
+    return [
+        {"file_path": str(path), "second": int(path.stem.rsplit("-", 1)[-1])}
+        for path in paths
+    ]
 
 
 def main():
@@ -293,11 +339,65 @@ def main():
                 }
             )
 
+    for group in GOLDEN_VIDEO_GROUPS:
+        group_result = fetcher.aggregate_clothing_results(
+            fetcher.analyze_frames_with_c_model(frames_for_prefix(frame_dir, group["prefix"])),
+            min_frames=7,
+        )
+        analysis = (group_result.get("result") or {}).get("analysis") or {}
+        aggregation = group_result.get("aggregation") or {}
+        expected_usable = group.get("expected_usable", True)
+
+        total += 1
+        usable_ok = bool(group_result.get("usable")) is expected_usable
+        correct += int(usable_ok)
+        rows.append(
+            {
+                "file": group["name"],
+                "check": "aggregate_usable",
+                "expected": expected_usable,
+                "actual": bool(group_result.get("usable")),
+                "used_frames": aggregation.get("used_frames", 0),
+                "ok": usable_ok,
+            }
+        )
+        if not expected_usable:
+            continue
+
+        total += 1
+        used_ok = aggregation.get("used_frames", 0) >= 7
+        correct += int(used_ok)
+        rows.append(
+            {
+                "file": group["name"],
+                "check": "aggregate_used_frames",
+                "expected": ">=7",
+                "actual": aggregation.get("used_frames", 0),
+                "ok": used_ok,
+            }
+        )
+
+        for key, expected_value in group["expected"].items():
+            total += 1
+            ok = analysis.get(key) == expected_value
+            correct += int(ok)
+            rows.append(
+                {
+                    "file": group["name"],
+                    "check": f"group_{key}",
+                    "expected": expected_value,
+                    "actual": analysis.get(key),
+                    "votes": (aggregation.get("votes") or {}).get(key, {}),
+                    "ok": ok,
+                }
+            )
+
     accuracy = correct / total * 100.0 if total else 0.0
     output = {
         "summary": {
             "samples": len(GOLDEN_SAMPLES),
             "sequences": len(GOLDEN_SEQUENCES),
+            "video_groups": len(GOLDEN_VIDEO_GROUPS),
             "checks": total,
             "correct": correct,
             "accuracy_percent": round(accuracy, 2),
