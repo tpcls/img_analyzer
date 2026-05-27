@@ -54,7 +54,21 @@ class YouTubeFrameFetcher:
             candidate = Path(prefix) / name
             if candidate.exists():
                 return str(candidate)
+        if name == "yt-dlp":
+            probe = subprocess.run(
+                [sys.executable, "-m", "yt_dlp", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if probe.returncode == 0:
+                return [sys.executable, "-m", "yt_dlp"]
         return name
+
+    def command_args(self, executable):
+        if isinstance(executable, (list, tuple)):
+            return [str(part) for part in executable]
+        return [str(executable)]
 
     def cache_key(self, value):
         return hashlib.sha1(str(value).encode("utf-8")).hexdigest()
@@ -96,7 +110,7 @@ class YouTubeFrameFetcher:
             return cached
 
         cmd = [
-            self.yt_dlp,
+            *self.command_args(self.yt_dlp),
             "--flat-playlist",
             "--no-warnings",
             "--print",
@@ -208,7 +222,7 @@ class YouTubeFrameFetcher:
         )
         output_template = str(self.video_cache_dir / "%(title).120s [%(id)s].%(ext)s")
         cmd = [
-            self.yt_dlp,
+            *self.command_args(self.yt_dlp),
             "--no-playlist",
             "--no-warnings",
             "--concurrent-fragments",
