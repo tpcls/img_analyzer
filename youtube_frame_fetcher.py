@@ -213,38 +213,53 @@ class YouTubeFrameFetcher:
         if cached:
             return self.file_payload(cached, cached=True)
 
-        format_selector = (
-            f"bv*[vcodec^=avc1][height<={max_height}][ext=mp4]+ba[acodec^=mp4a][ext=m4a]/"
-            f"bv*[vcodec!=none][height<={max_height}][ext=mp4]+ba[acodec!=none]/"
-            f"b[vcodec!=none][height<={max_height}][ext=mp4]/"
-            f"bv*[vcodec!=none][height<={max_height}]+ba[acodec!=none]/"
-            f"b[vcodec!=none][height<={max_height}]"
-        )
-        output_template = str(self.video_cache_dir / "%(title).120s [%(id)s].%(ext)s")
-        cmd = [
-            *self.command_args(self.yt_dlp),
-            "--no-playlist",
-            "--no-warnings",
-            "--concurrent-fragments",
-            "4",
-            "--retries",
-            "2",
-            "--fragment-retries",
-            "2",
-            "--no-part",
-            "--format",
-            format_selector,
-            "--merge-output-format",
-            "mp4",
-            "--print",
-            "after_move:filepath",
-            "--output",
-            output_template,
-            url,
+        format_selectors = [
+            (
+                f"bv*[vcodec^=avc1][height<={max_height}][ext=mp4]+ba[acodec^=mp4a][ext=m4a]/"
+                f"bv*[vcodec!=none][height<={max_height}][ext=mp4]+ba[acodec!=none]/"
+                f"b[vcodec!=none][height<={max_height}][ext=mp4]/"
+                f"bv*[vcodec!=none][height<={max_height}]+ba[acodec!=none]/"
+                f"b[vcodec!=none][height<={max_height}]"
+            ),
+            (
+                f"bv*[height<={max_height}]+ba/"
+                f"b[height<={max_height}]/"
+                f"bestvideo[height<={max_height}]+bestaudio/"
+                f"best[height<={max_height}]"
+            ),
+            "bv*+ba/bestvideo+bestaudio/best",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        if result.returncode != 0:
-            return {"ok": False, "error": (result.stderr or "yt-dlp download failed").strip()[-800:]}
+        output_template = str(self.video_cache_dir / "%(title).120s [%(id)s].%(ext)s")
+        last_error = ""
+        result = None
+        for format_selector in format_selectors:
+            cmd = [
+                *self.command_args(self.yt_dlp),
+                "--no-playlist",
+                "--no-warnings",
+                "--concurrent-fragments",
+                "4",
+                "--retries",
+                "2",
+                "--fragment-retries",
+                "2",
+                "--no-part",
+                "--format",
+                format_selector,
+                "--merge-output-format",
+                "mp4",
+                "--print",
+                "after_move:filepath",
+                "--output",
+                output_template,
+                url,
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+            if result.returncode == 0:
+                break
+            last_error = (result.stderr or "yt-dlp download failed").strip()[-800:]
+        if result is None or result.returncode != 0:
+            return {"ok": False, "error": last_error or "yt-dlp download failed"}
 
         file_path = ""
         for line in result.stdout.strip().splitlines():
