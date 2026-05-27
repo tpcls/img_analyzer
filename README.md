@@ -134,6 +134,7 @@ curl -X POST http://localhost:8000/analyze \
 - `MAX_JOBS`: 동시에 처리할 분석 작업 수. 기본값 `1`
 - `REQUEST_TIMEOUT_MS`: 요청 타임아웃. 기본값 `900000`
 - `SERV_API_API`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
+- `SERV_API_KEY`: `SERV_API_API`와 같은 용도의 호환 환경 변수입니다.
 
 - `usable`: 분석 결과를 실제로 써도 되는지 여부
 - `person_confidence`: 단일 인물 박스 신뢰도
