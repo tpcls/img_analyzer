@@ -124,6 +124,7 @@ def main():
                     "pants_length": (aggregation.get("votes") or {}).get("pants_length", {}),
                 },
                 "seconds": aggregation.get("seconds", []),
+                "lower_garment_decision": aggregate.get("lower_garment_decision", {}),
             }
         )
 

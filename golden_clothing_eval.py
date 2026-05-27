@@ -434,6 +434,20 @@ def main():
                 }
             )
 
+        decision = group_result.get("lower_garment_decision") or {}
+        total += 1
+        decision_ok = decision.get("label") == analysis.get("lower_garment")
+        correct += int(decision_ok)
+        rows.append(
+            {
+                "file": group["name"],
+                "check": "lower_garment_decision_label",
+                "expected": analysis.get("lower_garment"),
+                "actual": decision.get("label"),
+                "ok": decision_ok,
+            }
+        )
+
     accuracy = correct / total * 100.0 if total else 0.0
     output = {
         "summary": {

@@ -609,6 +609,13 @@ class YouTubeFrameFetcher:
         analysis["color_quality"] = (
             "high" if analysis["color_confidence"] >= 0.58 else "medium" if analysis["color_confidence"] >= 0.30 else "low"
         )
+        lower_garment_decision = {
+            "label": analysis["lower_garment"],
+            "confidence": analysis["lower_garment_vote_confidence"],
+            "margin": analysis["lower_garment_vote_margin"],
+            "votes": votes["lower_garment"],
+            "needs_review": analysis["lower_garment_vote_confidence"] < 0.75,
+        }
 
         representative = selected[0]["item"]
         result = {
@@ -616,6 +623,7 @@ class YouTubeFrameFetcher:
             "frame": representative.get("frame", {}),
             "result": {"ok": True, "analysis": analysis},
             "usable": analysis["person_confidence"] >= 0.36 and analysis["color_confidence"] >= 0.40,
+            "lower_garment_decision": lower_garment_decision,
             "aggregation": {
                 "method": "majority_vote",
                 "min_frames": min_frames,
@@ -633,7 +641,7 @@ class YouTubeFrameFetcher:
             warnings.append(f"only {len(selected)} valid frames were available for voting")
         if not result["usable"]:
             warnings.append("aggregated confidence is low; frame set is likely wide/group/poorly lit")
-        if result["usable"] and analysis["lower_garment_vote_confidence"] < 0.60:
+        if result["usable"] and lower_garment_decision["needs_review"]:
             warnings.append("lower garment vote is weak; add more frames or inspect manually")
         if warnings:
             result["warnings"] = warnings
