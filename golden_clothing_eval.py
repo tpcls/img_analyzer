@@ -8,6 +8,9 @@ from youtube_frame_fetcher import YouTubeFrameFetcher
 USABLE_PERSON_THRESHOLD = 0.36
 USABLE_COLOR_THRESHOLD = 0.40
 
+PANTS_GARMENTS = {"shorts", "knee_length_pants", "cropped_pants", "long_pants"}
+SKIRT_GARMENTS = {"mini_skirt", "knee_length_skirt", "midi_skirt", "long_skirt"}
+
 
 # Labels were assigned by visual inspection of the cached frame contact sheets in
 # eval_outputs/prediction_sheet_*.jpg. Low-quality wide/group frames are expected
@@ -256,6 +259,14 @@ def is_usable(analysis):
     )
 
 
+def lower_garment_family(value):
+    if value in PANTS_GARMENTS:
+        return "pants"
+    if value in SKIRT_GARMENTS:
+        return "skirt"
+    return "unknown"
+
+
 def frames_for_prefix(frame_dir, prefix):
     paths = sorted(
         frame_dir.glob(f"{prefix}-*.jpg"),
@@ -449,6 +460,27 @@ def main():
         )
 
     accuracy = correct / total * 100.0 if total else 0.0
+    lower_rows = [
+        row
+        for row in rows
+        if row["check"] in {"lower_garment", "aggregate_lower_garment", "group_lower_garment"}
+    ]
+    lower_correct = sum(1 for row in lower_rows if row["ok"])
+    lower_accuracy = lower_correct / len(lower_rows) * 100.0 if lower_rows else 0.0
+    family_rows = [
+        {
+            "file": row["file"],
+            "check": "pants_vs_skirt",
+            "expected": lower_garment_family(row["expected"]),
+            "actual": lower_garment_family(row["actual"]),
+            "ok": lower_garment_family(row["expected"]) == lower_garment_family(row["actual"]),
+        }
+        for row in lower_rows
+        if lower_garment_family(row["expected"]) != "unknown"
+    ]
+    family_correct = sum(1 for row in family_rows if row["ok"])
+    family_accuracy = family_correct / len(family_rows) * 100.0 if family_rows else 0.0
+    target_met = accuracy >= args.target and lower_accuracy >= args.target and family_accuracy >= args.target
     output = {
         "summary": {
             "samples": len(GOLDEN_SAMPLES),
@@ -457,11 +489,18 @@ def main():
             "checks": total,
             "correct": correct,
             "accuracy_percent": round(accuracy, 2),
+            "lower_garment_checks": len(lower_rows),
+            "lower_garment_correct": lower_correct,
+            "lower_garment_accuracy_percent": round(lower_accuracy, 2),
+            "pants_vs_skirt_checks": len(family_rows),
+            "pants_vs_skirt_correct": family_correct,
+            "pants_vs_skirt_accuracy_percent": round(family_accuracy, 2),
             "target_percent": args.target,
-            "target_met": accuracy >= args.target,
+            "target_met": target_met,
             "analysis_width": args.analysis_width,
         },
-        "failures": [row for row in rows if not row["ok"]],
+        "failures": [row for row in rows + family_rows if not row["ok"]],
+        "pants_vs_skirt_rows": family_rows,
         "rows": rows,
     }
     print(json.dumps(output, ensure_ascii=False, indent=2))
