@@ -15,59 +15,137 @@ USABLE_COLOR_THRESHOLD = 0.40
 GOLDEN_SAMPLES = [
     {
         "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-5.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-5.jpg",
-        "expected": {"upper_color": "white", "lower_color": "white", "pants_length": "shorts", "exposure": "high"},
+        "expected": {
+            "upper_color": "white",
+            "lower_color": "white",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "high",
+        },
     },
     {"file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-5.jpg", "expected_usable": False},
     {"file": "youtube-only-a94d3c442af11ebeb100fcfa2cf877143298f111-5.jpg", "expected_usable": False},
     {
         "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-5.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-10.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-10.jpg",
-        "expected": {"upper_color": "white", "lower_color": "white", "pants_length": "shorts", "exposure": "high"},
+        "expected": {
+            "upper_color": "white",
+            "lower_color": "white",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "high",
+        },
     },
     {
         "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-10.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-15.jpg",
-        "expected": {"upper_color": "white", "lower_color": "white", "pants_length": "shorts", "exposure": "low"},
+        "expected": {
+            "upper_color": "white",
+            "lower_color": "white",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "low",
+        },
     },
     {"file": "youtube-only-a94d3c442af11ebeb100fcfa2cf877143298f111-15.jpg", "expected_usable": False},
     {
         "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-15.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "low"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "low",
+        },
     },
     {
         "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-20.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-30.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-30.jpg",
-        "expected": {"upper_color": "white", "lower_color": "white", "pants_length": "shorts", "exposure": "low"},
+        "expected": {
+            "upper_color": "white",
+            "lower_color": "white",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "low",
+        },
     },
     {"file": "youtube-only-a94d3c442af11ebeb100fcfa2cf877143298f111-30.jpg", "expected_usable": False},
     {
         "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-30.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "low"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "low",
+        },
     },
     {
         "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-45.jpg",
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
 ]
 
@@ -83,7 +161,13 @@ GOLDEN_SEQUENCES = [
             "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-45.jpg",
             "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-60.jpg",
         ],
-        "expected": {"upper_color": "black", "lower_color": "black", "pants_length": "shorts", "exposure": "medium"},
+        "expected": {
+            "upper_color": "black",
+            "lower_color": "black",
+            "lower_garment": "shorts",
+            "pants_length": "shorts",
+            "exposure": "medium",
+        },
     },
     {
         "name": "Wonyoung seven-frame vote",
@@ -96,7 +180,13 @@ GOLDEN_SEQUENCES = [
             "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-45.jpg",
             "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-60.jpg",
         ],
-        "expected": {"upper_color": "white", "lower_color": "white", "pants_length": "shorts", "exposure": "low"},
+        "expected": {
+            "upper_color": "white",
+            "lower_color": "white",
+            "lower_garment": "mini_skirt",
+            "pants_length": "shorts",
+            "exposure": "low",
+        },
     },
 ]
 

@@ -863,6 +863,10 @@ static const char *lower_garment_from_shape(const char *pants_length, double cov
 {
     if (strcmp(pants_length, "shorts") == 0) {
         if (shape.center_fill_ratio > 0.58 && shape.split_ratio < 0.08) {
+            /* Raised/sideways legs in short pants fill the center like a skirt but leave high visible skin. */
+            if (coverage > 0.92 && lower_skin_ratio > 0.23 && lower_skin_ratio < 0.58) {
+                return "shorts";
+            }
             return "mini_skirt";
         }
         return "shorts";
