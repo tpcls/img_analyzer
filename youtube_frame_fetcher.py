@@ -30,6 +30,9 @@ class YouTubeFrameFetcher:
         self.ppm_cache_dir = self.cache_dir / "ppm"
         self.cache_ttl_seconds = 24 * 60 * 60
         self.search_ttl_seconds = 6 * 60 * 60
+        self.yt_dlp_upgrade_interval_seconds = int(
+            float(os.environ.get("YT_DLP_UPGRADE_INTERVAL_HOURS", "24")) * 60 * 60
+        )
         self.analysis_width = analysis_width
         self.yt_dlp = self.find_executable("yt-dlp")
         self.ffmpeg = self.find_executable("ffmpeg")
@@ -69,6 +72,48 @@ class YouTubeFrameFetcher:
         if isinstance(executable, (list, tuple)):
             return [str(part) for part in executable]
         return [str(executable)]
+
+    def maybe_upgrade_yt_dlp(self):
+        if self.yt_dlp_upgrade_interval_seconds <= 0:
+            return
+
+        marker = self.cache_dir / ".yt_dlp_upgrade_check"
+        lock = self.cache_dir / ".yt_dlp_upgrade.lock"
+        now = time.time()
+        try:
+            if marker.exists() and now - marker.stat().st_mtime < self.yt_dlp_upgrade_interval_seconds:
+                return
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            return
+        except OSError:
+            return
+
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fp:
+                fp.write(str(int(now)))
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+            if result.returncode == 0:
+                marker.write_text(str(int(time.time())), encoding="utf-8")
+                self.yt_dlp = self.find_executable("yt-dlp")
+            elif not marker.exists():
+                marker.write_text(str(int(time.time())), encoding="utf-8")
+        except Exception:
+            if not marker.exists():
+                try:
+                    marker.write_text(str(int(time.time())), encoding="utf-8")
+                except Exception:
+                    pass
+        finally:
+            try:
+                lock.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def cache_key(self, value):
         return hashlib.sha1(str(value).encode("utf-8")).hexdigest()
@@ -208,6 +253,7 @@ class YouTubeFrameFetcher:
             return False
 
     def download_fancam(self, url, max_height=720):
+        self.maybe_upgrade_yt_dlp()
         video_id = self.extract_youtube_id(url)
         cached = self.find_cached_video(video_id)
         if cached:

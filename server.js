@@ -12,11 +12,13 @@ const port = Number(process.env.PORT || 8000);
 const host = process.env.HOST || '0.0.0.0';
 const pythonBin = process.env.PYTHON_BIN || path.join(__dirname, '.venv', 'bin', 'python');
 const maxJobs = Math.max(1, Number(process.env.MAX_JOBS || 1));
+const maxQueue = Math.max(0, Number(process.env.MAX_QUEUE || 20));
 const requestTimeoutMs = Math.max(10_000, Number(process.env.REQUEST_TIMEOUT_MS || 900_000));
 const maxBodyBytes = process.env.MAX_BODY_BYTES || '16kb';
 const apiKey = process.env.SERV_API_API || process.env.SERV_API_KEY || '';
 
 let activeJobs = 0;
+const pendingJobs = [];
 
 app.use(express.json({ limit: maxBodyBytes }));
 
@@ -26,7 +28,9 @@ app.get('/health', (_req, res) => {
     status: 'ready',
     service: 'clothing-analyzer-express-api',
     active_jobs: activeJobs,
+    queued_jobs: pendingJobs.length,
     max_jobs: maxJobs,
+    max_queue: maxQueue,
   });
 });
 
@@ -45,12 +49,6 @@ app.use('/analyze', (req, res, next) => {
 
 app.post('/analyze', async (req, res) => {
   const requestId = crypto.randomUUID();
-  if (activeJobs >= maxJobs) {
-    console.warn(`[${requestId}] rejected: analyzer busy`);
-    res.status(429).json({ ok: false, status: 'busy', request_id: requestId, error: 'analyzer is busy; retry shortly' });
-    return;
-  }
-
   const payload = req.body || {};
   if (!payload.url || typeof payload.url !== 'string') {
     console.warn(`[${requestId}] rejected: missing url`);
@@ -58,12 +56,42 @@ app.post('/analyze', async (req, res) => {
     return;
   }
 
+  if (activeJobs >= maxJobs && pendingJobs.length >= maxQueue) {
+    console.warn(`[${requestId}] rejected: analyzer queue full`);
+    res.status(429).json({ ok: false, status: 'queue_full', request_id: requestId, error: 'analyzer queue is full; retry shortly' });
+    return;
+  }
+
+  const enqueuedAt = performance.now();
+  pendingJobs.push({ requestId, payload, res, enqueuedAt });
+  console.log(`[${requestId}] analyze queued url=${payload.url} active_jobs=${activeJobs}/${maxJobs} queued_jobs=${pendingJobs.length}/${maxQueue}`);
+  processQueue();
+});
+
+app.use((err, _req, res, _next) => {
+  if (err?.type === 'entity.too.large') {
+    res.status(413).json({ ok: false, status: 'too_large', error: `request body must be <= ${maxBodyBytes}` });
+    return;
+  }
+  res.status(400).json({ ok: false, status: 'bad_json', error: err.message });
+});
+
+function processQueue() {
+  while (activeJobs < maxJobs && pendingJobs.length > 0) {
+    const job = pendingJobs.shift();
+    runQueuedJob(job);
+  }
+}
+
+async function runQueuedJob({ requestId, payload, res, enqueuedAt }) {
   activeJobs += 1;
   const started = performance.now();
-  console.log(`[${requestId}] analyze started url=${payload.url} active_jobs=${activeJobs}/${maxJobs}`);
+  const queueMs = Math.round((started - enqueuedAt) * 100) / 100;
+  console.log(`[${requestId}] analyze started url=${payload.url} active_jobs=${activeJobs}/${maxJobs} queue_ms=${queueMs}`);
   try {
     const result = await analyzeWithPython(payload);
     result.elapsed_ms = Math.round((performance.now() - started) * 100) / 100;
+    result.queue_ms = queueMs;
     result.request_id = requestId;
     console.log(`[${requestId}] analyze finished ok=${result.ok} elapsed_ms=${result.elapsed_ms}`);
     res.status(result.ok ? 200 : 502).json(result);
@@ -75,20 +103,14 @@ app.post('/analyze', async (req, res) => {
       status: error.status || 'error',
       request_id: requestId,
       elapsed_ms: elapsedMs,
+      queue_ms: queueMs,
       error: error.message,
     });
   } finally {
     activeJobs -= 1;
+    processQueue();
   }
-});
-
-app.use((err, _req, res, _next) => {
-  if (err?.type === 'entity.too.large') {
-    res.status(413).json({ ok: false, status: 'too_large', error: `request body must be <= ${maxBodyBytes}` });
-    return;
-  }
-  res.status(400).json({ ok: false, status: 'bad_json', error: err.message });
-});
+}
 
 function analyzeWithPython(payload) {
   return new Promise((resolve, reject) => {
