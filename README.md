@@ -138,9 +138,15 @@ curl -X POST http://localhost:8000/analyze \
 - `MAX_JOBS`: 동시에 처리할 분석 작업 수. 기본값 `1`
 - `MAX_QUEUE`: 동시에 처리하지 못한 요청을 대기열에 쌓는 최대 개수. 기본값 `20`
 - `REQUEST_TIMEOUT_MS`: 요청 타임아웃. 기본값 `900000`
+- `RESULT_CACHE_TTL_MS`: 같은 URL/옵션 분석 결과를 메모리에 재사용하는 시간. 기본값 `300000`, `0`이면 비활성화
+- `RESULT_CACHE_MAX`: 메모리에 유지할 분석 결과 최대 개수. 기본값 `50`
 - `SERV_API_API`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
 - `SERV_API_KEY`: `SERV_API_API`와 같은 용도의 호환 환경 변수입니다.
 - `YT_DLP_UPGRADE_INTERVAL_HOURS`: `yt-dlp` 자동 업그레이드 체크 주기. 기본값 `24`, `0`이면 비활성화
+
+동일한 URL/옵션 요청이 동시에 들어오면 서버가 중복으로 다운로드/분석하지 않고 하나의 작업 결과를 여러 응답에 나눠줍니다. 반복 호출은 짧은 시간 동안 `cached_response: true`로 빠르게 반환됩니다.
+
+분석용 비디오는 기본 샘플/자동 샘플에 필요한 앞 구간만 내려받도록 캐시됩니다. 예를 들어 기본 설정은 120초 샘플까지 필요하므로 약 125초 구간을 우선 캐시하고, 같은 URL/옵션이면 다음 요청에서 재사용합니다.
 
 - `usable`: 분석 결과를 실제로 써도 되는지 여부
 - `person_confidence`: 단일 인물 박스 신뢰도

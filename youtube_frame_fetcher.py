@@ -347,14 +347,25 @@ class YouTubeFrameFetcher:
         thumb_path.write_bytes(resp.content)
         return self.file_payload(thumb_path, cached=False)
 
-    def find_cached_video(self, video_id):
+    def find_cached_video(self, video_id, max_height=None, sample_end_seconds=None):
         if not video_id:
             return None
-        matches = sorted(
-            (p for p in self.video_cache_dir.iterdir() if p.is_file() and f"[{video_id}]" in p.name),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
+        matches = []
+        sample_end_seconds = int(sample_end_seconds or 0)
+        for path in self.video_cache_dir.iterdir():
+            if not path.is_file() or f"[{video_id}]" not in path.name:
+                continue
+            marker = re.search(r"\sh(\d+)s(\d+)(?=\.)", path.name)
+            if marker and sample_end_seconds:
+                cached_height = int(marker.group(1))
+                cached_end = int(marker.group(2))
+                if max_height and cached_height < int(max_height):
+                    continue
+                if cached_end < sample_end_seconds:
+                    continue
+            matches.append(path)
+
+        matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         for path in matches:
             if path.is_file() and time.time() - path.stat().st_mtime <= self.cache_ttl_seconds:
                 if self.has_video_stream(path):
@@ -380,10 +391,19 @@ class YouTubeFrameFetcher:
         except Exception:
             return False
 
-    def download_fancam(self, url, max_height=720):
+    def sample_end_seconds(self, seconds=(), auto_seconds=(), enabled=True):
+        sample_points = list(seconds or [])
+        if enabled:
+            sample_points.extend(auto_seconds or [])
+        if not sample_points:
+            return 0
+        return max(30, int(max(sample_points)) + 5)
+
+    def download_fancam(self, url, max_height=720, sample_end_seconds=None):
         self.maybe_upgrade_yt_dlp()
         video_id = self.extract_youtube_id(url)
-        cached = self.find_cached_video(video_id)
+        sample_end_seconds = int(sample_end_seconds or 0)
+        cached = self.find_cached_video(video_id, max_height=max_height, sample_end_seconds=sample_end_seconds)
         if cached:
             return self.file_payload(cached, cached=True)
 
@@ -403,7 +423,8 @@ class YouTubeFrameFetcher:
             ),
             "bv*+ba/bestvideo+bestaudio/best",
         ]
-        output_template = str(self.video_cache_dir / "%(title).120s [%(id)s].%(ext)s")
+        sample_suffix = f" h{int(max_height)}s{sample_end_seconds}" if sample_end_seconds else ""
+        output_template = str(self.video_cache_dir / f"%(title).120s [%(id)s]{sample_suffix}.%(ext)s")
         last_error = ""
         result = None
         youtube_client_args = [
@@ -412,34 +433,43 @@ class YouTubeFrameFetcher:
             ["--extractor-args", "youtube:player_client=tv,web"],
             ["--force-ipv4"],
         ]
+        section_args_options = (
+            [["--download-sections", f"*0-{sample_end_seconds}"], []]
+            if sample_end_seconds
+            else [[]]
+        )
         for client_args in youtube_client_args:
-            for format_selector in format_selectors:
-                cmd = [
-                    *self.command_args(self.yt_dlp),
-                    "--no-playlist",
-                    "--no-warnings",
-                    "--concurrent-fragments",
-                    "4",
-                    "--retries",
-                    "2",
-                    "--fragment-retries",
-                    "2",
-                    "--no-part",
-                    *client_args,
-                    "--format",
-                    format_selector,
-                    "--merge-output-format",
-                    "mp4",
-                    "--print",
-                    "after_move:filepath",
-                    "--output",
-                    output_template,
-                    url,
-                ]
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-                if result.returncode == 0:
+            for section_args in section_args_options:
+                for format_selector in format_selectors:
+                    cmd = [
+                        *self.command_args(self.yt_dlp),
+                        "--no-playlist",
+                        "--no-warnings",
+                        "--concurrent-fragments",
+                        "4",
+                        "--retries",
+                        "2",
+                        "--fragment-retries",
+                        "2",
+                        "--no-part",
+                        *client_args,
+                        *section_args,
+                        "--format",
+                        format_selector,
+                        "--merge-output-format",
+                        "mp4",
+                        "--print",
+                        "after_move:filepath",
+                        "--output",
+                        output_template,
+                        url,
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+                    if result.returncode == 0:
+                        break
+                    last_error = (result.stderr or "yt-dlp download failed").strip()[-800:]
+                if result and result.returncode == 0:
                     break
-                last_error = (result.stderr or "yt-dlp download failed").strip()[-800:]
             if result and result.returncode == 0:
                 break
         if result is None or result.returncode != 0:
@@ -542,6 +572,70 @@ class YouTubeFrameFetcher:
         payload["second"] = second
         return payload
 
+    def frame_ppm_path(self, image_path):
+        source = Path(image_path)
+        return self.ppm_cache_dir / f"{self.cache_key(f'{source.resolve()}|w={self.analysis_width}')}.ppm"
+
+    def ensure_frame_ppms(self, frames):
+        if not frames:
+            return {}
+
+        ready = {}
+        missing = []
+        for frame in frames:
+            source = Path(frame["file_path"])
+            key = str(source.resolve())
+            ppm_path = self.frame_ppm_path(source)
+            if ppm_path.exists() and time.time() - ppm_path.stat().st_mtime <= self.cache_ttl_seconds:
+                ready[key] = {"ok": True, "ppm_path": str(ppm_path.resolve()), "cached": True}
+            else:
+                missing.append((key, source, ppm_path))
+
+        if not missing:
+            return ready
+
+        tmp_token = f"{os.getpid()}-{int(time.time() * 1000)}"
+        tmp_paths = []
+        cmd = [self.ffmpeg, "-y"]
+        for _, source, _ in missing:
+            cmd.extend(["-i", str(source)])
+        for idx, (_, _, ppm_path) in enumerate(missing):
+            tmp_path = ppm_path.with_name(f".{ppm_path.stem}.{tmp_token}.tmp.ppm")
+            tmp_paths.append(tmp_path)
+            cmd.extend(
+                [
+                    "-map",
+                    f"{idx}:v:0",
+                    f"-frames:v:{idx}",
+                    "1",
+                    f"-vf:v:{idx}",
+                    f"scale={self.analysis_width}:-2:force_original_aspect_ratio=decrease",
+                    "-update",
+                    "1",
+                    "-f",
+                    "image2",
+                    str(tmp_path),
+                ]
+            )
+        subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+
+        for (key, source, ppm_path), tmp_path in zip(missing, tmp_paths):
+            if tmp_path.exists():
+                tmp_path.replace(ppm_path)
+            if ppm_path.exists():
+                ready[key] = {"ok": True, "ppm_path": str(ppm_path.resolve()), "cached": False}
+            else:
+                fallback = self.ensure_ppm(source)
+                if fallback.get("ok"):
+                    ready[key] = fallback
+                else:
+                    ready[key] = fallback
+
+        for tmp_path in tmp_paths:
+            tmp_path.unlink(missing_ok=True)
+
+        return ready
+
     def analyze_with_c_model(self, image_path):
         source = Path(image_path)
         ppm = self.ensure_ppm(source)
@@ -576,10 +670,11 @@ class YouTubeFrameFetcher:
 
     def ensure_ppm(self, image_path):
         source = Path(image_path)
-        ppm_path = self.ppm_cache_dir / f"{self.cache_key(f'{source.resolve()}|w={self.analysis_width}')}.ppm"
+        ppm_path = self.frame_ppm_path(source)
         if ppm_path.exists() and time.time() - ppm_path.stat().st_mtime <= self.cache_ttl_seconds:
             return {"ok": True, "ppm_path": str(ppm_path.resolve()), "cached": True}
 
+        tmp_path = ppm_path.with_name(f".{ppm_path.stem}.{os.getpid()}-{int(time.time() * 1000)}.tmp.ppm")
         convert_cmd = [
             self.ffmpeg,
             "-y",
@@ -591,11 +686,13 @@ class YouTubeFrameFetcher:
             "1",
             "-f",
             "image2",
-            str(ppm_path),
+            str(tmp_path),
         ]
         convert_result = subprocess.run(convert_cmd, capture_output=True, text=True, timeout=30)
-        if convert_result.returncode != 0 or not ppm_path.exists():
+        if convert_result.returncode != 0 or not tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
             return {"ok": False, "error": (convert_result.stderr or "PPM conversion failed").strip()[-800:]}
+        tmp_path.replace(ppm_path)
         return {"ok": True, "ppm_path": str(ppm_path.resolve()), "cached": False}
 
     def run_c_model_batch(self, ppm_paths):
@@ -688,6 +785,8 @@ class YouTubeFrameFetcher:
         if analysis.get("lower_garment") == "unknown" or analysis.get("lower_garment_family") == "unknown":
             return True
         if int(aggregation.get("unknown_counts", {}).get("lower_garment", 0)) >= min_vote_frames:
+            return True
+        if float(analysis.get("lower_garment_vote_confidence", 0.0)) < 0.75 and len(output.get("frames") or []) < min_vote_frames + 3:
             return True
         return False
 
@@ -788,11 +887,20 @@ class YouTubeFrameFetcher:
         }
 
         representative = selected[0]["item"]
+        strict_usable = analysis["person_confidence"] >= 0.36 and analysis["color_confidence"] >= 0.40
+        vote_usable = (
+            analysis["lower_garment"] != "unknown"
+            and analysis["lower_garment_family"] != "unknown"
+            and analysis["lower_garment_vote_confidence"] >= 0.60
+            and analysis["lower_garment_family_vote_confidence"] >= 0.60
+            and analysis["person_confidence"] >= 0.30
+            and analysis["color_confidence"] >= 0.34
+        )
         result = {
             "second": representative.get("second"),
             "frame": representative.get("frame", {}),
             "result": {"ok": True, "analysis": analysis},
-            "usable": analysis["person_confidence"] >= 0.36 and analysis["color_confidence"] >= 0.40,
+            "usable": strict_usable or vote_usable,
             "lower_garment_decision": lower_garment_decision,
             "aggregation": {
                 "method": "majority_vote",
@@ -813,7 +921,7 @@ class YouTubeFrameFetcher:
         all_lower_unknown = analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
         if all_lower_unknown:
             warnings.append("lower garment type was unknown in every voted frame; collect more frames or inspect manually")
-        if not result["usable"]:
+        if not strict_usable:
             warnings.append("aggregated confidence is low; frame set is likely wide/group/poorly lit")
         if result["usable"] and lower_garment_decision["needs_review"] and not all_lower_unknown:
             warnings.append("lower garment vote is weak; add more frames or inspect manually")
@@ -826,11 +934,13 @@ class YouTubeFrameFetcher:
             result["warnings"] = warnings
         return result
 
-    def analyze_frames_with_c_model(self, frames):
+    def analyze_frames_with_c_model(self, frames, video_path=None, prefix="sample"):
+        frame_ppms = self.ensure_frame_ppms(frames)
         prepared = []
         results = []
         for frame in frames:
-            ppm = self.ensure_ppm(frame["file_path"])
+            frame_key = str(Path(frame["file_path"]).resolve())
+            ppm = frame_ppms.get(frame_key) or self.ensure_ppm(frame["file_path"])
             if ppm.get("ok"):
                 prepared.append((frame, ppm))
             else:
@@ -927,7 +1037,11 @@ class YouTubeFrameFetcher:
         if skip_video:
             return output
 
-        video = self.download_fancam(url, max_height=max_height)
+        video = self.download_fancam(
+            url,
+            max_height=max_height,
+            sample_end_seconds=self.sample_end_seconds(seconds, auto_seconds, enabled=not no_auto_sample),
+        )
         output["video"] = video
         if not video.get("ok"):
             output["ok"] = False
@@ -942,7 +1056,11 @@ class YouTubeFrameFetcher:
         if not analyze_clothing:
             return output
 
-        output["frame_clothing"] = self.analyze_frames_with_c_model(output["frames"])
+        output["frame_clothing"] = self.analyze_frames_with_c_model(
+            output["frames"],
+            video_path=video["file_path"],
+            prefix="youtube-only",
+        )
         output["best_frame_clothing"] = self.select_best_clothing_result(output["frame_clothing"])
         output["final_clothing"] = self.aggregate_clothing_results(
             output["frame_clothing"],
@@ -962,7 +1080,11 @@ class YouTubeFrameFetcher:
                 output["frames"] = self.merge_frames(output["frames"], extra_frames)
                 output["frame_clothing"] = self.merge_frame_clothing(
                     output["frame_clothing"],
-                    self.analyze_frames_with_c_model(extra_frames),
+                    self.analyze_frames_with_c_model(
+                        extra_frames,
+                        video_path=video["file_path"],
+                        prefix="youtube-only",
+                    ),
                 )
                 output["best_frame_clothing"] = self.select_best_clothing_result(output["frame_clothing"])
                 output["final_clothing"] = self.aggregate_clothing_results(
@@ -1031,17 +1153,30 @@ def main():
         output["thumbnail_clothing"] = fetcher.analyze_with_c_model(thumbnail["file_path"])
 
     if not args.skip_video:
-        video = fetcher.download_fancam(selected["url"], max_height=args.max_height)
+        initial_seconds = parse_seconds(args.seconds)
+        auto_seconds = parse_seconds(args.auto_seconds)
+        video = fetcher.download_fancam(
+            selected["url"],
+            max_height=args.max_height,
+            sample_end_seconds=fetcher.sample_end_seconds(
+                initial_seconds,
+                auto_seconds,
+                enabled=not args.no_auto_sample,
+            ),
+        )
         output["video"] = video
         if video.get("ok"):
-            initial_seconds = parse_seconds(args.seconds)
             output["frames"] = fetcher.extract_sample_frames(
                 video["file_path"],
                 seconds=initial_seconds,
                 prefix="youtube-only",
             )
             if args.analyze_clothing:
-                output["frame_clothing"] = fetcher.analyze_frames_with_c_model(output["frames"])
+                output["frame_clothing"] = fetcher.analyze_frames_with_c_model(
+                    output["frames"],
+                    video_path=video["file_path"],
+                    prefix="youtube-only",
+                )
                 output["best_frame_clothing"] = fetcher.select_best_clothing_result(output["frame_clothing"])
                 output["final_clothing"] = fetcher.aggregate_clothing_results(
                     output["frame_clothing"],
@@ -1060,7 +1195,11 @@ def main():
                         output["frames"] = fetcher.merge_frames(output["frames"], extra_frames)
                         output["frame_clothing"] = fetcher.merge_frame_clothing(
                             output["frame_clothing"],
-                            fetcher.analyze_frames_with_c_model(extra_frames),
+                            fetcher.analyze_frames_with_c_model(
+                                extra_frames,
+                                video_path=video["file_path"],
+                                prefix="youtube-only",
+                            ),
                         )
                         output["best_frame_clothing"] = fetcher.select_best_clothing_result(output["frame_clothing"])
                         output["final_clothing"] = fetcher.aggregate_clothing_results(

@@ -17,20 +17,30 @@ def run_case(fetcher, query, seconds, auto_seconds, max_height, min_vote_frames)
     if not selected:
         return {"query": query, "ok": False, "error": "no video found"}
 
-    video = fetcher.download_fancam(selected["url"], max_height=max_height)
+    initial_seconds = parse_seconds(seconds)
+    extra_sample_seconds = parse_seconds(auto_seconds)
+    video = fetcher.download_fancam(
+        selected["url"],
+        max_height=max_height,
+        sample_end_seconds=fetcher.sample_end_seconds(initial_seconds, extra_sample_seconds),
+    )
     if not video.get("ok"):
         return {"query": query, "ok": False, "selected": selected.get("title", ""), "error": video.get("error")}
 
     frames = fetcher.extract_sample_frames(
         video["file_path"],
-        seconds=parse_seconds(seconds),
+        seconds=initial_seconds,
         prefix="youtube-only",
     )
-    frame_clothing = fetcher.analyze_frames_with_c_model(frames)
+    frame_clothing = fetcher.analyze_frames_with_c_model(
+        frames,
+        video_path=video["file_path"],
+        prefix="youtube-only",
+    )
     best = fetcher.aggregate_clothing_results(frame_clothing, min_frames=min_vote_frames)
     if best and (len(frames) < min_vote_frames or not best.get("usable", False)):
         already = {frame["second"] for frame in frames}
-        extra_seconds = tuple(s for s in parse_seconds(auto_seconds) if s not in already)
+        extra_seconds = tuple(s for s in extra_sample_seconds if s not in already)
         if extra_seconds:
             extra_frames = fetcher.extract_sample_frames(
                 video["file_path"],
@@ -40,7 +50,11 @@ def run_case(fetcher, query, seconds, auto_seconds, max_height, min_vote_frames)
             frames = fetcher.merge_frames(frames, extra_frames)
             frame_clothing = fetcher.merge_frame_clothing(
                 frame_clothing,
-                fetcher.analyze_frames_with_c_model(extra_frames),
+                fetcher.analyze_frames_with_c_model(
+                    extra_frames,
+                    video_path=video["file_path"],
+                    prefix="youtube-only",
+                ),
             )
             best = fetcher.aggregate_clothing_results(frame_clothing, min_frames=min_vote_frames)
 
