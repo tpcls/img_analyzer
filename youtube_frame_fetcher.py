@@ -147,9 +147,108 @@ class YouTubeFrameFetcher:
                 return match.group(1)
         return ""
 
+    def normalize_search_text(self, value):
+        value = str(value or "").lower()
+        value = re.sub(r"[^0-9a-z가-힣]+", " ", value)
+        return re.sub(r"\s+", " ", value).strip()
+
+    def contains_search_term(self, text, term):
+        text = self.normalize_search_text(text)
+        term = self.normalize_search_text(term)
+        if not text or not term:
+            return False
+        if re.fullmatch(r"[0-9a-z ]+", term):
+            pattern = r"(?<![0-9a-z])" + r"\s+".join(re.escape(part) for part in term.split()) + r"(?![0-9a-z])"
+            return re.search(pattern, text) is not None
+        return term in text
+
+    def query_match_groups(self, query_name):
+        alias_groups = [
+            ("ive", ("ive", "아이브"), False),
+            ("wonyoung", ("wonyoung", "won young", "jang wonyoung", "jang won young", "원영", "장원영"), True),
+            ("twice", ("twice", "트와이스"), False),
+            ("jeongyeon", ("jeongyeon", "jungyeon", "정연", "유정연"), True),
+            ("karina", ("karina", "카리나", "유지민"), True),
+        ]
+        generic_terms = {
+            "fancam",
+            "fan",
+            "cam",
+            "focus",
+            "직캠",
+            "4k",
+            "8k",
+            "stage",
+            "live",
+            "performance",
+            "official",
+            "뮤직뱅크",
+            "인기가요",
+            "엠카",
+            "쇼음악중심",
+        }
+        normalized_query = self.normalize_search_text(query_name)
+        groups = []
+        consumed = set()
+
+        for name, aliases, specific in alias_groups:
+            if any(self.contains_search_term(normalized_query, alias) for alias in aliases):
+                groups.append({"name": name, "aliases": aliases, "specific": specific})
+                for alias in aliases:
+                    consumed.update(self.normalize_search_text(alias).split())
+
+        for token in normalized_query.split():
+            if token in consumed or token in generic_terms or len(token) < 2:
+                continue
+            groups.append({"name": token, "aliases": (token,), "specific": len(token) >= 4})
+
+        deduped = []
+        seen = set()
+        for group in groups:
+            if group["name"] in seen:
+                continue
+            seen.add(group["name"])
+            deduped.append(group)
+        return deduped
+
+    def score_search_result(self, query_name, title):
+        groups = self.query_match_groups(query_name)
+        matched = []
+        for group in groups:
+            if any(self.contains_search_term(title, alias) for alias in group["aliases"]):
+                matched.append(group)
+
+        all_matched = bool(groups) and len(matched) == len(groups)
+        specific_matched = any(group["specific"] for group in matched)
+        accepted = not groups or all_matched or specific_matched
+        return {
+            "accepted": accepted,
+            "matched": [group["name"] for group in matched],
+            "required": [group["name"] for group in groups],
+            "score": len(matched) + (2 if specific_matched else 0) + (2 if all_matched else 0),
+        }
+
+    def filter_search_results(self, query_name, results, limit):
+        filtered = []
+        seen_ids = set()
+        for item in results:
+            video_id = item.get("id") or self.extract_youtube_id(item.get("url", ""))
+            if not video_id or video_id in seen_ids:
+                continue
+            title = item.get("title", "")
+            match = self.score_search_result(query_name, title)
+            if not match["accepted"]:
+                continue
+            seen_ids.add(video_id)
+            filtered.append({**item, "query_match": match})
+
+        filtered.sort(key=lambda item: item.get("query_match", {}).get("score", 0), reverse=True)
+        return filtered[:limit]
+
     def get_fancams(self, query_name, limit=5):
         search_query = f"{query_name} 직캠 fancam"
-        cache_path = self.search_cache_dir / f"{self.cache_key(f'{search_query}|limit={limit}')}.json"
+        search_limit = max(limit * 4, limit + 8, 12)
+        cache_path = self.search_cache_dir / f"{self.cache_key(f'{search_query}|limit={limit}|filter=v3')}.json"
         cached = self.read_json_cache(cache_path, self.search_ttl_seconds)
         if cached is not None:
             return cached
@@ -159,36 +258,39 @@ class YouTubeFrameFetcher:
             "--flat-playlist",
             "--no-warnings",
             "--print",
-            "%(id)s|||%(title)s|||%(thumbnail)s",
-            f"ytsearch{limit}:{search_query}",
+            "%(id)s|||%(title)s|||%(thumbnail)s|||%(uploader)s",
+            f"ytsearch{search_limit}:{search_query}",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
             raise RuntimeError((result.stderr or "yt-dlp search failed").strip()[-800:])
 
-        fancams = []
+        raw_fancams = []
         for line in result.stdout.strip().splitlines():
             if "|||" not in line:
                 continue
-            parts = line.split("|||", 2)
+            parts = line.split("|||", 3)
             if len(parts) < 2:
                 continue
             video_id = parts[0].strip()
             title = parts[1].strip()
             thumbnail_url = parts[2].strip() if len(parts) > 2 else ""
+            uploader = parts[3].strip() if len(parts) > 3 else ""
             if not video_id or not title or video_id == "NA":
                 continue
             if not thumbnail_url or thumbnail_url == "NA":
                 thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-            fancams.append(
+            raw_fancams.append(
                 {
                     "title": title,
                     "url": f"https://www.youtube.com/watch?v={video_id}",
                     "id": video_id,
                     "thumbnail_url": thumbnail_url,
+                    "uploader": "" if uploader == "NA" else uploader,
                 }
             )
 
+        fancams = self.filter_search_results(query_name, raw_fancams, limit)
         self.write_json_cache(cache_path, fancams)
         return fancams
 
