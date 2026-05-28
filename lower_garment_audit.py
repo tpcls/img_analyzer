@@ -63,7 +63,7 @@ def build_sheet(groups, group_results, output_path):
             label = "\n".join(
                 [
                     f"#{index + 1} {short_name(path)}",
-                    f"{analysis.get('lower_garment')} len:{analysis.get('pants_length')} L:{analysis.get('lower_color')}",
+                    f"{analysis.get('lower_garment_family')}:{analysis.get('lower_garment')} len:{analysis.get('pants_length')} L:{analysis.get('lower_color')}",
                     f"pc:{analysis.get('person_confidence')} cc:{analysis.get('color_confidence')}",
                     f"skin:{analysis.get('lower_skin_ratio')} cov:{analysis.get('lower_coverage_ratio')}",
                     f"split:{analysis.get('lower_split_ratio')} center:{analysis.get('lower_center_fill_ratio')}",
@@ -108,6 +108,7 @@ def main():
                 "warnings": aggregate.get("warnings", []),
                 "analysis": {
                     "lower_garment": analysis.get("lower_garment"),
+                    "lower_garment_family": analysis.get("lower_garment_family"),
                     "pants_length": analysis.get("pants_length"),
                     "lower_color": analysis.get("lower_color"),
                     "person_confidence": analysis.get("person_confidence"),
@@ -118,9 +119,12 @@ def main():
                     "lower_center_fill_ratio": analysis.get("lower_center_fill_ratio"),
                     "lower_garment_vote_confidence": analysis.get("lower_garment_vote_confidence"),
                     "lower_garment_vote_margin": analysis.get("lower_garment_vote_margin"),
+                    "lower_garment_family_vote_confidence": analysis.get("lower_garment_family_vote_confidence"),
+                    "lower_garment_family_vote_margin": analysis.get("lower_garment_family_vote_margin"),
                 },
                 "votes": {
                     "lower_garment": (aggregation.get("votes") or {}).get("lower_garment", {}),
+                    "lower_garment_family": (aggregation.get("votes") or {}).get("lower_garment_family", {}),
                     "pants_length": (aggregation.get("votes") or {}).get("pants_length", {}),
                 },
                 "seconds": aggregation.get("seconds", []),

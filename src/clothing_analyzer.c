@@ -895,6 +895,23 @@ static const char *lower_garment_from_shape(const char *pants_length, double cov
     return "unknown";
 }
 
+static const char *lower_garment_family(const char *lower_garment)
+{
+    if (strcmp(lower_garment, "shorts") == 0 ||
+        strcmp(lower_garment, "knee_length_pants") == 0 ||
+        strcmp(lower_garment, "cropped_pants") == 0 ||
+        strcmp(lower_garment, "long_pants") == 0) {
+        return "pants";
+    }
+    if (strcmp(lower_garment, "mini_skirt") == 0 ||
+        strcmp(lower_garment, "knee_length_skirt") == 0 ||
+        strcmp(lower_garment, "midi_skirt") == 0 ||
+        strcmp(lower_garment, "long_skirt") == 0) {
+        return "skirt";
+    }
+    return "unknown";
+}
+
 static const char *exposure_from_skin(double total, double upper, double lower)
 {
     double score = total * 0.65 + upper * 0.25 + lower * 0.10;
@@ -1020,6 +1037,7 @@ ClothingAnalysis analyze_clothing(const Image *image)
     result.lower_color = dominant_color(image, lower, skin_gain);
     result.pants_length = pants_length_from_coverage(coverage, skin_lower, skin_reach);
     result.lower_garment = lower_garment_from_shape(result.pants_length, coverage, skin_upper, skin_lower, lower_shape);
+    result.lower_garment_family = lower_garment_family(result.lower_garment);
     result.exposure = exposure_from_skin(skin_total, skin_upper, skin_lower);
     result.skin_ratio = skin_total;
     result.upper_skin_ratio = skin_upper;

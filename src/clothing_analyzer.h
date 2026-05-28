@@ -13,6 +13,7 @@ typedef struct {
     const char *upper_color;
     const char *lower_color;
     const char *lower_garment;
+    const char *lower_garment_family;
     const char *pants_length;
     const char *exposure;
     double skin_ratio;

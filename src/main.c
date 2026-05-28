@@ -16,6 +16,7 @@ static void print_analysis_json(const ClothingAnalysis *result, int indent)
     printf("%s  \"upper_color\": \"%s\",\n", sp, result->upper_color);
     printf("%s  \"lower_color\": \"%s\",\n", sp, result->lower_color);
     printf("%s  \"lower_garment\": \"%s\",\n", sp, result->lower_garment);
+    printf("%s  \"lower_garment_family\": \"%s\",\n", sp, result->lower_garment_family);
     printf("%s  \"pants_length\": \"%s\",\n", sp, result->pants_length);
     printf("%s  \"exposure\": \"%s\",\n", sp, result->exposure);
     printf("%s  \"skin_ratio\": %.4f,\n", sp, result->skin_ratio);

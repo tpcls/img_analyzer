@@ -586,12 +586,21 @@ class YouTubeFrameFetcher:
             confidence = counts[winner] / sum(counts.values())
             return winner, dict(counts), round(confidence, 4), counts[winner] - runner_up
 
+        def lower_garment_family(value):
+            if value in {"shorts", "knee_length_pants", "cropped_pants", "long_pants"}:
+                return "pants"
+            if value in {"mini_skirt", "knee_length_skirt", "midi_skirt", "long_skirt"}:
+                return "skirt"
+            return "unknown"
+
         analysis = {}
         votes = {}
         vote_confidence = {}
         vote_margin = {}
-        for key in ("upper_color", "lower_color", "lower_garment", "pants_length", "exposure"):
+        for key in ("upper_color", "lower_color", "lower_garment", "lower_garment_family", "pants_length", "exposure"):
             analysis[key], votes[key], vote_confidence[key], vote_margin[key] = vote(key)
+        if analysis["lower_garment_family"] == "unknown":
+            analysis["lower_garment_family"] = lower_garment_family(analysis["lower_garment"])
 
         analysis["skin_ratio"] = numeric_mean("skin_ratio")
         analysis["upper_skin_ratio"] = numeric_mean("upper_skin_ratio")
@@ -601,6 +610,8 @@ class YouTubeFrameFetcher:
         analysis["lower_center_fill_ratio"] = numeric_mean("lower_center_fill_ratio")
         analysis["lower_garment_vote_confidence"] = vote_confidence["lower_garment"]
         analysis["lower_garment_vote_margin"] = vote_margin["lower_garment"]
+        analysis["lower_garment_family_vote_confidence"] = vote_confidence["lower_garment_family"]
+        analysis["lower_garment_family_vote_margin"] = vote_margin["lower_garment_family"]
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (
@@ -611,9 +622,13 @@ class YouTubeFrameFetcher:
         )
         lower_garment_decision = {
             "label": analysis["lower_garment"],
+            "family": analysis["lower_garment_family"],
             "confidence": analysis["lower_garment_vote_confidence"],
+            "family_confidence": analysis["lower_garment_family_vote_confidence"],
             "margin": analysis["lower_garment_vote_margin"],
+            "family_margin": analysis["lower_garment_family_vote_margin"],
             "votes": votes["lower_garment"],
+            "family_votes": votes["lower_garment_family"],
             "needs_review": analysis["lower_garment_vote_confidence"] < 0.75,
         }
 

@@ -330,6 +330,21 @@ def main():
                     "ok": ok,
                 }
             )
+        if "lower_garment" in expected:
+            expected_family = lower_garment_family(expected["lower_garment"])
+            total += 1
+            ok = analysis.get("lower_garment_family") == expected_family and usable
+            correct += int(ok)
+            rows.append(
+                {
+                    "file": sample["file"],
+                    "check": "lower_garment_family",
+                    "expected": expected_family,
+                    "actual": analysis.get("lower_garment_family"),
+                    "usable": usable,
+                    "ok": ok,
+                }
+            )
 
     for sequence in GOLDEN_SEQUENCES:
         sequence_frames = []
@@ -371,6 +386,21 @@ def main():
                     "expected": expected_value,
                     "actual": analysis.get(key),
                     "votes": (aggregation.get("votes") or {}).get(key, {}),
+                    "ok": ok,
+                }
+            )
+        if "lower_garment" in sequence["expected"]:
+            expected_family = lower_garment_family(sequence["expected"]["lower_garment"])
+            total += 1
+            ok = analysis.get("lower_garment_family") == expected_family
+            correct += int(ok)
+            rows.append(
+                {
+                    "file": sequence["name"],
+                    "check": "aggregate_lower_garment_family",
+                    "expected": expected_family,
+                    "actual": analysis.get("lower_garment_family"),
+                    "votes": (aggregation.get("votes") or {}).get("lower_garment_family", {}),
                     "ok": ok,
                 }
             )
@@ -427,6 +457,21 @@ def main():
                     "ok": ok,
                 }
             )
+        if "lower_garment" in group["expected"]:
+            expected_family = lower_garment_family(group["expected"]["lower_garment"])
+            total += 1
+            ok = analysis.get("lower_garment_family") == expected_family
+            correct += int(ok)
+            rows.append(
+                {
+                    "file": group["name"],
+                    "check": "group_lower_garment_family",
+                    "expected": expected_family,
+                    "actual": analysis.get("lower_garment_family"),
+                    "votes": (aggregation.get("votes") or {}).get("lower_garment_family", {}),
+                    "ok": ok,
+                }
+            )
 
         if "min_lower_garment_vote_confidence" in group:
             total += 1
@@ -456,6 +501,18 @@ def main():
                 "expected": analysis.get("lower_garment"),
                 "actual": decision.get("label"),
                 "ok": decision_ok,
+            }
+        )
+        total += 1
+        decision_family_ok = decision.get("family") == analysis.get("lower_garment_family")
+        correct += int(decision_family_ok)
+        rows.append(
+            {
+                "file": group["name"],
+                "check": "lower_garment_decision_family",
+                "expected": analysis.get("lower_garment_family"),
+                "actual": decision.get("family"),
+                "ok": decision_family_ok,
             }
         )
 
