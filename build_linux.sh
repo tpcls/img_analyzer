@@ -176,6 +176,7 @@ run_tests() {
     "$ROOT_DIR/golden_clothing_eval.py" \
     "$ROOT_DIR/lower_garment_audit.py" \
     "$ROOT_DIR/search_filter_eval.py" \
+    "$ROOT_DIR/aggregation_warning_eval.py" \
     "$ROOT_DIR/benchmark_performance.py"
 
   log "Running Node syntax check"
@@ -183,6 +184,9 @@ run_tests() {
 
   log "Running search result filter regression"
   (cd "$ROOT_DIR" && "$VENV_DIR/bin/python" search_filter_eval.py)
+
+  log "Running aggregation warning regression"
+  (cd "$ROOT_DIR" && "$VENV_DIR/bin/python" aggregation_warning_eval.py)
 
   if compgen -G "$ROOT_DIR/cache/youtube_only/frames/*.jpg" >/dev/null; then
     log "Running cached golden evaluation"

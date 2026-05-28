@@ -651,6 +651,20 @@ class YouTubeFrameFetcher:
             best["warnings"] = warnings
         return best
 
+    def needs_additional_sampling(self, output, min_vote_frames):
+        final = output.get("final_clothing") or {}
+        analysis = (final.get("result") or {}).get("analysis") or {}
+        aggregation = final.get("aggregation") or {}
+        if len(output.get("frames") or []) < min_vote_frames:
+            return True
+        if final and not final.get("usable", False):
+            return True
+        if analysis.get("lower_garment") == "unknown" or analysis.get("lower_garment_family") == "unknown":
+            return True
+        if int(aggregation.get("unknown_counts", {}).get("lower_garment", 0)) >= min_vote_frames:
+            return True
+        return False
+
     def aggregate_clothing_results(self, frame_clothing, min_frames=7):
         ranked = self.scored_clothing_items(frame_clothing)
         if not ranked:
@@ -674,19 +688,21 @@ class YouTubeFrameFetcher:
         def vote(name):
             counts = Counter()
             tie_scores = Counter()
+            unknown_count = 0
             for entry in selected:
                 value = entry["analysis"].get(name)
                 if not value or value == "unknown":
+                    unknown_count += 1
                     continue
                 counts[value] += 1
                 tie_scores[value] += entry["score"]
             if not counts:
-                return "unknown", {}, 0.0, 0
+                return "unknown", {}, 0.0, 0, unknown_count
             winner = max(counts, key=lambda value: (counts[value], tie_scores[value]))
             ordered_counts = sorted(counts.values(), reverse=True)
             runner_up = ordered_counts[1] if len(ordered_counts) > 1 else 0
             confidence = counts[winner] / sum(counts.values())
-            return winner, dict(counts), round(confidence, 4), counts[winner] - runner_up
+            return winner, dict(counts), round(confidence, 4), counts[winner] - runner_up, unknown_count
 
         def lower_garment_family(value):
             if value in {"shorts", "knee_length_pants", "cropped_pants", "long_pants"}:
@@ -699,8 +715,9 @@ class YouTubeFrameFetcher:
         votes = {}
         vote_confidence = {}
         vote_margin = {}
+        unknown_counts = {}
         for key in ("upper_color", "lower_color", "lower_garment", "lower_garment_family", "pants_length", "exposure"):
-            analysis[key], votes[key], vote_confidence[key], vote_margin[key] = vote(key)
+            analysis[key], votes[key], vote_confidence[key], vote_margin[key], unknown_counts[key] = vote(key)
         if analysis["lower_garment_family"] == "unknown":
             analysis["lower_garment_family"] = lower_garment_family(analysis["lower_garment"])
 
@@ -714,6 +731,8 @@ class YouTubeFrameFetcher:
         analysis["lower_garment_vote_margin"] = vote_margin["lower_garment"]
         analysis["lower_garment_family_vote_confidence"] = vote_confidence["lower_garment_family"]
         analysis["lower_garment_family_vote_margin"] = vote_margin["lower_garment_family"]
+        analysis["lower_garment_unknown_frames"] = unknown_counts["lower_garment"]
+        analysis["lower_garment_family_unknown_frames"] = unknown_counts["lower_garment_family"]
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (
@@ -721,6 +740,13 @@ class YouTubeFrameFetcher:
         )
         analysis["color_quality"] = (
             "high" if analysis["color_confidence"] >= 0.58 else "medium" if analysis["color_confidence"] >= 0.30 else "low"
+        )
+        lower_garment_reason = (
+            "all_unknown"
+            if analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
+            else "weak_vote"
+            if analysis["lower_garment_vote_confidence"] < 0.75
+            else "ok"
         )
         lower_garment_decision = {
             "label": analysis["lower_garment"],
@@ -732,6 +758,7 @@ class YouTubeFrameFetcher:
             "votes": votes["lower_garment"],
             "family_votes": votes["lower_garment_family"],
             "needs_review": analysis["lower_garment_vote_confidence"] < 0.75,
+            "reason": lower_garment_reason,
         }
 
         representative = selected[0]["item"]
@@ -750,16 +777,25 @@ class YouTubeFrameFetcher:
                 "votes": votes,
                 "vote_confidence": vote_confidence,
                 "vote_margin": vote_margin,
+                "unknown_counts": unknown_counts,
             },
         }
 
         warnings = []
         if len(selected) < min_frames:
             warnings.append(f"only {len(selected)} valid frames were available for voting")
+        all_lower_unknown = analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
+        if all_lower_unknown:
+            warnings.append("lower garment type was unknown in every voted frame; collect more frames or inspect manually")
         if not result["usable"]:
             warnings.append("aggregated confidence is low; frame set is likely wide/group/poorly lit")
-        if result["usable"] and lower_garment_decision["needs_review"]:
+        if result["usable"] and lower_garment_decision["needs_review"] and not all_lower_unknown:
             warnings.append("lower garment vote is weak; add more frames or inspect manually")
+        if (
+            analysis.get("color_quality") == "medium"
+            and (analysis.get("upper_color") == "purple" or analysis.get("lower_color") == "purple")
+        ):
+            warnings.append("purple clothing detected with medium color quality; fine tone distinctions may be limited")
         if warnings:
             result["warnings"] = warnings
         return result
@@ -864,16 +900,7 @@ class YouTubeFrameFetcher:
             min_frames=min_vote_frames,
         )
 
-        if (
-            not no_auto_sample
-            and (
-                len(output["frames"]) < min_vote_frames
-                or (
-                    output["final_clothing"]
-                    and not output["final_clothing"].get("usable", False)
-                )
-            )
-        ):
+        if not no_auto_sample and self.needs_additional_sampling(output, min_vote_frames):
             already = {frame["second"] for frame in output["frames"]}
             extra_seconds = tuple(s for s in auto_seconds if s not in already)
             output["auto_sampled"] = False
@@ -969,16 +996,7 @@ def main():
                     output["frame_clothing"],
                     min_frames=args.min_vote_frames,
                 )
-                if (
-                    not args.no_auto_sample
-                    and (
-                        len(output["frames"]) < args.min_vote_frames
-                        or (
-                            output["final_clothing"]
-                            and not output["final_clothing"].get("usable", False)
-                        )
-                    )
-                ):
+                if not args.no_auto_sample and fetcher.needs_additional_sampling(output, args.min_vote_frames):
                     already = {frame["second"] for frame in output["frames"]}
                     extra_seconds = tuple(s for s in parse_seconds(args.auto_seconds) if s not in already)
                     output["auto_sampled"] = False
