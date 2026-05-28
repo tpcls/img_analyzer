@@ -174,6 +174,7 @@ run_tests() {
     "$ROOT_DIR/youtube_frame_fetcher.py" \
     "$ROOT_DIR/batch_clothing_test.py" \
     "$ROOT_DIR/golden_clothing_eval.py" \
+    "$ROOT_DIR/lower_garment_audit.py" \
     "$ROOT_DIR/benchmark_performance.py"
 
   log "Running Node syntax check"

@@ -220,12 +220,14 @@ GOLDEN_VIDEO_GROUPS = [
         "prefix": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20",
         "expected": {"lower_garment": "shorts", "pants_length": "shorts"},
         "min_lower_garment_vote_confidence": 0.90,
+        "min_lower_garment_family_vote_confidence": 0.90,
     },
     {
         "name": "Wonyoung full cached vote",
         "prefix": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473",
         "expected": {"lower_garment": "mini_skirt", "pants_length": "shorts"},
         "min_lower_garment_vote_confidence": 0.90,
+        "min_lower_garment_family_vote_confidence": 0.90,
     },
     {
         "name": "Wide cage full cached vote",
@@ -242,12 +244,14 @@ GOLDEN_VIDEO_GROUPS = [
         "prefix": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9",
         "expected": {"lower_garment": "mini_skirt", "pants_length": "shorts"},
         "min_lower_garment_vote_confidence": 0.60,
+        "min_lower_garment_family_vote_confidence": 0.90,
     },
     {
         "name": "Stage white shorts full cached vote",
         "prefix": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d",
         "expected": {"lower_garment": "shorts", "pants_length": "shorts"},
         "min_lower_garment_vote_confidence": 0.90,
+        "min_lower_garment_family_vote_confidence": 0.90,
     },
 ]
 
@@ -486,6 +490,23 @@ def main():
                     "expected": f">={expected_confidence}",
                     "actual": actual_confidence,
                     "votes": (aggregation.get("votes") or {}).get("lower_garment", {}),
+                    "ok": ok,
+                }
+            )
+
+        if "min_lower_garment_family_vote_confidence" in group:
+            total += 1
+            actual_confidence = float(analysis.get("lower_garment_family_vote_confidence", 0.0))
+            expected_confidence = group["min_lower_garment_family_vote_confidence"]
+            ok = actual_confidence >= expected_confidence
+            correct += int(ok)
+            rows.append(
+                {
+                    "file": group["name"],
+                    "check": "lower_garment_family_vote_confidence",
+                    "expected": f">={expected_confidence}",
+                    "actual": actual_confidence,
+                    "votes": (aggregation.get("votes") or {}).get("lower_garment_family", {}),
                     "ok": ok,
                 }
             )

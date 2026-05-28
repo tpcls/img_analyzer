@@ -170,6 +170,8 @@ curl -X POST http://localhost:8000/analyze \
 
 이 명령은 `eval_outputs/lower_garment_audit.jpg`와 `eval_outputs/lower_garment_audit.json`을 생성합니다.
 
+CI/로컬 게이트로는 `golden_clothing_eval.py`를 사용합니다. 이 평가는 하의 세부 라벨 정확도와 `pants/skirt` family 정확도, 그리고 family 다수결 신뢰도가 모두 목표치 이상인지 확인합니다.
+
 ## Performance Benchmark
 
 ```sh
