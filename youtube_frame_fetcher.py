@@ -245,6 +245,50 @@ class YouTubeFrameFetcher:
         filtered.sort(key=lambda item: item.get("query_match", {}).get("score", 0), reverse=True)
         return filtered[:limit]
 
+    def parse_video_info_line(self, line, fallback_url=""):
+        if "|||" not in line:
+            return {}
+        parts = line.split("|||", 3)
+        if len(parts) < 2:
+            return {}
+        video_id = parts[0].strip()
+        title = parts[1].strip()
+        thumbnail_url = parts[2].strip() if len(parts) > 2 else ""
+        uploader = parts[3].strip() if len(parts) > 3 else ""
+        if not video_id or video_id == "NA":
+            video_id = self.extract_youtube_id(fallback_url)
+        if not title or title == "NA":
+            title = ""
+        if not thumbnail_url or thumbnail_url == "NA":
+            thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" if video_id else ""
+        return {
+            "title": title,
+            "url": f"https://www.youtube.com/watch?v={video_id}" if video_id else fallback_url,
+            "id": video_id,
+            "thumbnail_url": thumbnail_url,
+            "uploader": "" if uploader == "NA" else uploader,
+        }
+
+    def get_video_info(self, url):
+        cmd = [
+            *self.command_args(self.yt_dlp),
+            "--no-playlist",
+            "--no-warnings",
+            "--skip-download",
+            "--print",
+            "%(id)s|||%(title)s|||%(thumbnail)s|||%(uploader)s",
+            url,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode != 0:
+            return {"ok": False, "error": (result.stderr or "yt-dlp metadata failed").strip()[-800:]}
+
+        for line in result.stdout.strip().splitlines():
+            info = self.parse_video_info_line(line, fallback_url=url)
+            if info:
+                return {"ok": True, **info}
+        return {"ok": False, "error": "video metadata not found"}
+
     def get_fancams(self, query_name, limit=5):
         search_query = f"{query_name} 직캠 fancam"
         search_limit = max(limit * 4, limit + 8, 12)
@@ -267,28 +311,10 @@ class YouTubeFrameFetcher:
 
         raw_fancams = []
         for line in result.stdout.strip().splitlines():
-            if "|||" not in line:
+            info = self.parse_video_info_line(line)
+            if not info.get("id") or not info.get("title"):
                 continue
-            parts = line.split("|||", 3)
-            if len(parts) < 2:
-                continue
-            video_id = parts[0].strip()
-            title = parts[1].strip()
-            thumbnail_url = parts[2].strip() if len(parts) > 2 else ""
-            uploader = parts[3].strip() if len(parts) > 3 else ""
-            if not video_id or not title or video_id == "NA":
-                continue
-            if not thumbnail_url or thumbnail_url == "NA":
-                thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
-            raw_fancams.append(
-                {
-                    "title": title,
-                    "url": f"https://www.youtube.com/watch?v={video_id}",
-                    "id": video_id,
-                    "thumbnail_url": thumbnail_url,
-                    "uploader": "" if uploader == "NA" else uploader,
-                }
-            )
+            raw_fancams.append(info)
 
         fancams = self.filter_search_results(query_name, raw_fancams, limit)
         self.write_json_cache(cache_path, fancams)
@@ -864,6 +890,21 @@ class YouTubeFrameFetcher:
             "id": self.extract_youtube_id(url),
             "thumbnail_url": thumbnail_url,
         }
+        video_info = None
+        if query:
+            video_info = self.get_video_info(url)
+            if video_info.get("ok"):
+                selected.update(
+                    {
+                        "title": video_info.get("title", ""),
+                        "url": video_info.get("url", url),
+                        "id": video_info.get("id") or selected["id"],
+                        "thumbnail_url": video_info.get("thumbnail_url") or thumbnail_url,
+                        "uploader": video_info.get("uploader", ""),
+                    }
+                )
+                thumbnail_url = selected["thumbnail_url"]
+                selected["query_match"] = self.score_search_result(query, selected["title"])
         output = {
             "ok": True,
             "query": query,
@@ -871,6 +912,14 @@ class YouTubeFrameFetcher:
             "search_results": [selected],
             "thumbnail": self.get_thumbnail_frame(url, thumbnail_url),
         }
+        warnings = []
+        if video_info and not video_info.get("ok"):
+            output["video_metadata"] = video_info
+        if query and selected.get("query_match") and not selected["query_match"].get("accepted"):
+            output["link_query_mismatch"] = True
+            warnings.append("provided URL title does not match query; analyzer will still inspect the linked video")
+        if warnings:
+            output["warnings"] = warnings
 
         if include_thumbnail_analysis and analyze_clothing and output["thumbnail"].get("ok"):
             output["thumbnail_clothing"] = self.analyze_with_c_model(output["thumbnail"]["file_path"])
@@ -931,7 +980,7 @@ def parse_seconds(value):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--query", default="IVE Wonyoung")
+    parser.add_argument("--query", default="")
     parser.add_argument("--url", default="")
     parser.add_argument("--limit", type=int, default=3)
     parser.add_argument("--seconds", default="5,10,15,20,30,45,60")
@@ -961,6 +1010,8 @@ def main():
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return
     else:
+        if not args.query:
+            raise SystemExit("--query is required when --url is not provided")
         fancams = fetcher.get_fancams(args.query, limit=args.limit)
         selected = fancams[0] if fancams else None
 

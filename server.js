@@ -137,6 +137,9 @@ function analyzeWithPython(payload) {
     if (payload.skip_video) {
       args.push('--skip-video');
     }
+    if (payload.query && typeof payload.query === 'string') {
+      args.push('--query', payload.query);
+    }
 
     const child = spawn(pythonBin, args, {
       cwd: __dirname,

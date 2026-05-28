@@ -120,6 +120,7 @@ curl -X POST http://localhost:8000/analyze \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+    "query": "IVE Wonyoung",
     "seconds": [5, 10, 15, 20, 30, 45, 60],
     "min_vote_frames": 7,
     "analysis_width": 384,
@@ -127,7 +128,7 @@ curl -X POST http://localhost:8000/analyze \
   }'
 ```
 
-응답에는 `final_clothing`에 7프레임 다수결 결과가 들어갑니다.
+`query`는 선택값입니다. URL만 보내면 시스템이 인물명을 자동으로 붙이지 않고 빈 값으로 둡니다. `query`를 같이 보내면 URL 영상 제목과 쿼리의 매칭 결과가 `selected.query_match`에 포함되고, 제목이 맞지 않으면 `link_query_mismatch: true` 경고가 붙습니다. 응답에는 `final_clothing`에 7프레임 다수결 결과가 들어갑니다.
 
 환경 변수:
 
