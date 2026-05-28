@@ -230,14 +230,33 @@ GOLDEN_VIDEO_GROUPS = [
         "min_lower_garment_family_vote_confidence": 0.90,
     },
     {
+        "name": "White stage shorts cached vote",
+        "prefix": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1",
+        "expected": {"lower_garment": "shorts", "pants_length": "shorts"},
+        "min_lower_garment_vote_confidence": 0.90,
+        "min_lower_garment_family_vote_confidence": 0.90,
+    },
+    {
         "name": "Wide cage full cached vote",
         "prefix": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb",
+        "expected_usable": False,
+    },
+    {
+        "name": "Second wide cage full cached vote",
+        "prefix": "youtube-only-982faa2a2ad4d932633fa192cf1c3ff9f6dbff4c",
         "expected_usable": False,
     },
     {
         "name": "Laser wide full cached vote",
         "prefix": "youtube-only-a94d3c442af11ebeb100fcfa2cf877143298f111",
         "expected_usable": False,
+    },
+    {
+        "name": "Black shorts stage cached vote",
+        "prefix": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451",
+        "expected": {"lower_garment": "shorts", "pants_length": "shorts"},
+        "min_lower_garment_vote_confidence": 0.90,
+        "min_lower_garment_family_vote_confidence": 0.90,
     },
     {
         "name": "Stage black skirt full cached vote",
