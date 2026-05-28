@@ -12,58 +12,87 @@ DEFAULT_QUERIES = [
 
 
 def run_case(fetcher, query, seconds, auto_seconds, max_height, min_vote_frames):
-    fancams = fetcher.get_fancams(query, limit=1)
-    selected = fancams[0] if fancams else None
-    if not selected:
+    fancams = fetcher.get_fancams(query, limit=4)
+    if not fancams:
         return {"query": query, "ok": False, "error": "no video found"}
 
+    attempts = []
+    candidate_results = []
     initial_seconds = parse_seconds(seconds)
     extra_sample_seconds = parse_seconds(auto_seconds)
-    video = fetcher.download_fancam(
-        selected["url"],
-        max_height=max_height,
-        sample_end_seconds=fetcher.sample_end_seconds(initial_seconds, extra_sample_seconds),
-    )
-    if not video.get("ok"):
-        return {"query": query, "ok": False, "selected": selected.get("title", ""), "error": video.get("error")}
 
-    frames = fetcher.extract_sample_frames(
-        video["file_path"],
-        seconds=initial_seconds,
-        prefix="youtube-only",
-    )
-    frame_clothing = fetcher.analyze_frames_with_c_model(
-        frames,
-        video_path=video["file_path"],
-        prefix="youtube-only",
-    )
-    best = fetcher.aggregate_clothing_results(frame_clothing, min_frames=min_vote_frames)
-    if best and (len(frames) < min_vote_frames or not best.get("usable", False)):
-        already = {frame["second"] for frame in frames}
-        extra_seconds = tuple(s for s in extra_sample_seconds if s not in already)
-        if extra_seconds:
-            extra_frames = fetcher.extract_sample_frames(
-                video["file_path"],
-                seconds=extra_seconds,
-                prefix="youtube-only",
-            )
-            frames = fetcher.merge_frames(frames, extra_frames)
-            frame_clothing = fetcher.merge_frame_clothing(
-                frame_clothing,
-                fetcher.analyze_frames_with_c_model(
-                    extra_frames,
-                    video_path=video["file_path"],
+    for selected in fancams:
+        video = fetcher.download_fancam(
+            selected["url"],
+            max_height=max_height,
+            sample_end_seconds=fetcher.sample_end_seconds(initial_seconds, extra_sample_seconds),
+        )
+        if not video.get("ok"):
+            attempts.append({"selected": selected.get("title", ""), "ok": False, "error": video.get("error")})
+            continue
+
+        frames = fetcher.extract_sample_frames(
+            video["file_path"],
+            seconds=initial_seconds,
+            prefix="youtube-only",
+        )
+        frame_clothing = fetcher.analyze_frames_with_c_model(
+            frames,
+            video_path=video["file_path"],
+            prefix="youtube-only",
+        )
+        best = fetcher.aggregate_clothing_results(frame_clothing, min_frames=min_vote_frames)
+        if best and (len(frames) < min_vote_frames or not best.get("usable", False)):
+            already = {frame["second"] for frame in frames}
+            extra_seconds = tuple(s for s in extra_sample_seconds if s not in already)
+            if extra_seconds:
+                extra_frames = fetcher.extract_sample_frames(
+                    video["file_path"],
+                    seconds=extra_seconds,
                     prefix="youtube-only",
-                ),
-            )
-            best = fetcher.aggregate_clothing_results(frame_clothing, min_frames=min_vote_frames)
+                )
+                frames = fetcher.merge_frames(frames, extra_frames)
+                frame_clothing = fetcher.merge_frame_clothing(
+                    frame_clothing,
+                    fetcher.analyze_frames_with_c_model(
+                        extra_frames,
+                        video_path=video["file_path"],
+                        prefix="youtube-only",
+                    ),
+                )
+                best = fetcher.aggregate_clothing_results(frame_clothing, min_frames=min_vote_frames)
 
-    best = best or {}
+        best = best or {}
+        analysis = (best.get("result") or {}).get("analysis") or {}
+        attempts.append(
+            {
+                "selected": selected.get("title", ""),
+                "ok": True,
+                "usable": best.get("usable", False),
+                "lower_garment": analysis.get("lower_garment"),
+                "lower_garment_family": analysis.get("lower_garment_family"),
+                "person_confidence": analysis.get("person_confidence"),
+                "color_confidence": analysis.get("color_confidence"),
+            }
+        )
+        candidate_results.append((selected, best))
+        if best.get("usable", False):
+            break
+
+    successful = [attempt for attempt in attempts if attempt.get("ok")]
+    if not successful:
+        return {"query": query, "ok": False, "selected": attempts[0].get("selected", ""), "attempts": attempts, "error": attempts[0].get("error")}
+
+    best_result_index = next((idx for idx, (_selected, item) in enumerate(candidate_results) if item.get("usable", False)), None)
+    if best_result_index is None:
+        best_result_index = 0
+    selected, best = candidate_results[best_result_index]
     analysis = (best.get("result") or {}).get("analysis") or {}
     return {
         "query": query,
         "ok": True,
         "selected": selected.get("title", ""),
+        "attempts": attempts,
         "best_second": best.get("second"),
         "usable": best.get("usable", False),
         "warnings": best.get("warnings", []),
