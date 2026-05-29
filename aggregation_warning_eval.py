@@ -84,6 +84,32 @@ def main():
             any("only 2 voted frames" in warning for warning in partial_warnings),
         ]
     )
+    sparse_frames = [
+        frame_item(5, "mini_skirt", "unknown", "shorts"),
+        frame_item(10, "mini_skirt", "unknown", "shorts"),
+        frame_item(15, "long_skirt", "unknown", "long"),
+        *[frame_item(second) for second in (20, 30, 45, 60, 75, 90, 120)],
+    ]
+    sparse_aggregate = fetcher.aggregate_clothing_results(sparse_frames, min_frames=7)
+    sparse_analysis = (sparse_aggregate.get("result") or {}).get("analysis") or {}
+    sparse_output = {
+        "usable": sparse_aggregate.get("usable"),
+        "warnings": sparse_aggregate.get("warnings", []),
+        "decision": sparse_aggregate.get("lower_garment_decision", {}),
+        "analysis": sparse_analysis,
+    }
+    output["sparse_known"] = sparse_output
+    checks.extend(
+        [
+            sparse_analysis.get("lower_garment") == "mini_skirt",
+            sparse_analysis.get("lower_garment_family") == "skirt",
+            sparse_analysis.get("lower_garment_known_frames") == 3,
+            sparse_analysis.get("lower_garment_family_known_frames") == 3,
+            sparse_output["usable"] is False,
+            sparse_output["decision"].get("reason") == "sparse_known",
+            any("only 3 voted frames" in warning for warning in sparse_output["warnings"]),
+        ]
+    )
     output["ok"] = all(checks)
     print(json.dumps(output, ensure_ascii=False, indent=2))
     raise SystemExit(0 if output["ok"] else 1)

@@ -1021,6 +1021,25 @@ class YouTubeFrameFetcher:
         unknown_counts = {}
         for key in ("upper_color", "lower_color", "lower_garment", "lower_garment_family", "pants_length", "exposure"):
             analysis[key], votes[key], vote_confidence[key], vote_margin[key], unknown_counts[key] = vote(key)
+        derived_family_counts = Counter()
+        for lower_value, count in votes["lower_garment"].items():
+            family = lower_garment_family(lower_value)
+            if family != "unknown":
+                derived_family_counts[family] += count
+        derived_family_total = sum(derived_family_counts.values())
+        raw_family_known = len(selected) - unknown_counts["lower_garment_family"]
+        if derived_family_total > raw_family_known:
+            family_winner = max(derived_family_counts, key=lambda value: derived_family_counts[value])
+            family_counts = sorted(derived_family_counts.values(), reverse=True)
+            family_runner_up = family_counts[1] if len(family_counts) > 1 else 0
+            analysis["lower_garment_family"] = family_winner
+            votes["lower_garment_family"] = dict(derived_family_counts)
+            vote_confidence["lower_garment_family"] = round(
+                derived_family_counts[family_winner] / derived_family_total,
+                4,
+            )
+            vote_margin["lower_garment_family"] = derived_family_counts[family_winner] - family_runner_up
+            unknown_counts["lower_garment_family"] = len(selected) - derived_family_total
         derived_lower_family = lower_garment_family(analysis["lower_garment"])
         if (
             derived_lower_family != "unknown"
@@ -1048,7 +1067,7 @@ class YouTubeFrameFetcher:
         analysis["lower_garment_family_unknown_frames"] = unknown_counts["lower_garment_family"]
         analysis["lower_garment_known_frames"] = len(selected) - unknown_counts["lower_garment"]
         analysis["lower_garment_family_known_frames"] = len(selected) - unknown_counts["lower_garment_family"]
-        if analysis["lower_garment_known_frames"] < min(4, min_frames):
+        if analysis["lower_garment_known_frames"] < min(3, min_frames):
             analysis["lower_garment"] = "unknown"
             analysis["lower_garment_family"] = "unknown"
             analysis["pants_length"] = "unknown"
@@ -1063,6 +1082,8 @@ class YouTubeFrameFetcher:
         lower_garment_reason = (
             "all_unknown"
             if analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
+            else "sparse_known"
+            if analysis["lower_garment_known_frames"] < min(4, min_frames)
             else "weak_vote"
             if analysis["lower_garment_vote_confidence"] < 0.75
             else "ok"
