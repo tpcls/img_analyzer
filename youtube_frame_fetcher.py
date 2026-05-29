@@ -899,6 +899,8 @@ class YouTubeFrameFetcher:
             score_value += 0.06
         if analysis.get("pants_length") != "unknown":
             score_value += 0.03
+        if analysis.get("lower_garment") == "unknown":
+            score_value -= 0.15
         if skin_ratio < 0.08:
             score_value -= 0.10
         elif skin_ratio > 0.90:
@@ -956,7 +958,11 @@ class YouTubeFrameFetcher:
             return True
         if analysis.get("lower_garment") == "unknown" or analysis.get("lower_garment_family") == "unknown":
             return True
-        if int(aggregation.get("unknown_counts", {}).get("lower_garment", 0)) >= min_vote_frames:
+        lower_unknown = int(aggregation.get("unknown_counts", {}).get("lower_garment", 0))
+        lower_known = len(output.get("frames") or []) - lower_unknown
+        if lower_unknown >= min_vote_frames:
+            return True
+        if lower_known < min(4, min_vote_frames) and len(output.get("frames") or []) < min_vote_frames + 3:
             return True
         if float(analysis.get("lower_garment_vote_confidence", 0.0)) < 0.75 and len(output.get("frames") or []) < min_vote_frames + 3:
             return self.auto_sample_weak_vote
@@ -1015,8 +1021,18 @@ class YouTubeFrameFetcher:
         unknown_counts = {}
         for key in ("upper_color", "lower_color", "lower_garment", "lower_garment_family", "pants_length", "exposure"):
             analysis[key], votes[key], vote_confidence[key], vote_margin[key], unknown_counts[key] = vote(key)
-        if analysis["lower_garment_family"] == "unknown":
-            analysis["lower_garment_family"] = lower_garment_family(analysis["lower_garment"])
+        derived_lower_family = lower_garment_family(analysis["lower_garment"])
+        if (
+            derived_lower_family != "unknown"
+            and (
+                analysis["lower_garment_family"] == "unknown"
+                or (
+                    analysis["lower_garment_family"] != derived_lower_family
+                    and vote_confidence["lower_garment_family"] < 0.75
+                )
+            )
+        ):
+            analysis["lower_garment_family"] = derived_lower_family
 
         analysis["skin_ratio"] = numeric_mean("skin_ratio")
         analysis["upper_skin_ratio"] = numeric_mean("upper_skin_ratio")
@@ -1030,6 +1046,12 @@ class YouTubeFrameFetcher:
         analysis["lower_garment_family_vote_margin"] = vote_margin["lower_garment_family"]
         analysis["lower_garment_unknown_frames"] = unknown_counts["lower_garment"]
         analysis["lower_garment_family_unknown_frames"] = unknown_counts["lower_garment_family"]
+        analysis["lower_garment_known_frames"] = len(selected) - unknown_counts["lower_garment"]
+        analysis["lower_garment_family_known_frames"] = len(selected) - unknown_counts["lower_garment_family"]
+        if analysis["lower_garment_known_frames"] < min(4, min_frames):
+            analysis["lower_garment"] = "unknown"
+            analysis["lower_garment_family"] = "unknown"
+            analysis["pants_length"] = "unknown"
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (
@@ -1054,6 +1076,8 @@ class YouTubeFrameFetcher:
             "family_margin": analysis["lower_garment_family_vote_margin"],
             "votes": votes["lower_garment"],
             "family_votes": votes["lower_garment_family"],
+            "known_frames": analysis["lower_garment_known_frames"],
+            "family_known_frames": analysis["lower_garment_family_known_frames"],
             "needs_review": analysis["lower_garment_vote_confidence"] < 0.75,
             "reason": lower_garment_reason,
         }
@@ -1062,6 +1086,7 @@ class YouTubeFrameFetcher:
         strict_usable = analysis["person_confidence"] >= 0.36 and analysis["color_confidence"] >= 0.40
         lower_label = analysis["lower_garment"]
         lower_family = analysis["lower_garment_family"]
+        enough_lower_frames = analysis["lower_garment_known_frames"] >= min(4, min_frames)
         exact_lower_vote = (
             analysis["lower_garment_vote_confidence"] >= 0.67
             and analysis["lower_garment_family_vote_confidence"] >= 0.60
@@ -1072,7 +1097,8 @@ class YouTubeFrameFetcher:
             and analysis["lower_garment_family_vote_confidence"] >= 0.85
         )
         stable_lower_vote = (
-            lower_label != "unknown"
+            enough_lower_frames
+            and lower_label != "unknown"
             and lower_family != "unknown"
             and (exact_lower_vote or short_family_vote)
         )
@@ -1106,6 +1132,10 @@ class YouTubeFrameFetcher:
         all_lower_unknown = analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
         if all_lower_unknown:
             warnings.append("lower garment type was unknown in every voted frame; collect more frames or inspect manually")
+        elif analysis["lower_garment_known_frames"] < min(4, min_frames):
+            warnings.append(
+                f"only {analysis['lower_garment_known_frames']} voted frames had a lower garment type; collect more frames or inspect manually"
+            )
         if not strict_usable:
             warnings.append("aggregated confidence is low; frame set is likely wide/group/poorly lit")
         if lower_garment_decision["needs_review"] and not all_lower_unknown:

@@ -3,7 +3,7 @@ import json
 from youtube_frame_fetcher import YouTubeFrameFetcher
 
 
-def frame_item(second):
+def frame_item(second, lower_garment="unknown", lower_garment_family="unknown", pants_length="unknown"):
     return {
         "second": second,
         "frame": {"file_path": f"mock-{second}.jpg"},
@@ -12,9 +12,9 @@ def frame_item(second):
             "analysis": {
                 "upper_color": "purple",
                 "lower_color": "purple",
-                "lower_garment": "unknown",
-                "lower_garment_family": "unknown",
-                "pants_length": "unknown",
+                "lower_garment": lower_garment,
+                "lower_garment_family": lower_garment_family,
+                "pants_length": pants_length,
                 "exposure": "medium",
                 "skin_ratio": 0.16,
                 "upper_skin_ratio": 0.18,
@@ -56,6 +56,34 @@ def main():
         any("purple clothing detected" in warning for warning in warnings),
         output["needs_additional_sampling"] is True,
     ]
+    partial_frames = [
+        frame_item(5, "mini_skirt", "skirt", "shorts"),
+        frame_item(10, "long_skirt", "skirt", "long"),
+        *[frame_item(second) for second in (15, 20, 30, 45, 60)],
+    ]
+    partial_aggregate = fetcher.aggregate_clothing_results(partial_frames, min_frames=7)
+    partial_analysis = (partial_aggregate.get("result") or {}).get("analysis") or {}
+    partial_warnings = partial_aggregate.get("warnings", [])
+    partial_output = {
+        "usable": partial_aggregate.get("usable"),
+        "warnings": partial_warnings,
+        "analysis": partial_analysis,
+        "needs_additional_sampling": fetcher.needs_additional_sampling(
+            {"frames": partial_frames, "final_clothing": partial_aggregate},
+            min_vote_frames=7,
+        ),
+    }
+    output["partial_unknown"] = partial_output
+    checks.extend(
+        [
+            partial_analysis.get("lower_garment_unknown_frames") == 5,
+            partial_analysis.get("lower_garment_known_frames") == 2,
+            partial_analysis.get("lower_garment") == "unknown",
+            partial_output["usable"] is False,
+            partial_output["needs_additional_sampling"] is True,
+            any("only 2 voted frames" in warning for warning in partial_warnings),
+        ]
+    )
     output["ok"] = all(checks)
     print(json.dumps(output, ensure_ascii=False, indent=2))
     raise SystemExit(0 if output["ok"] else 1)
