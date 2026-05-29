@@ -1052,6 +1052,9 @@ ClothingAnalysis analyze_clothing(const Image *image)
     result.lower_split_ratio = lower_shape.split_ratio;
     result.lower_center_fill_ratio = lower_shape.center_fill_ratio;
     result.person_confidence = estimate_person_confidence(image, subject, skin_total);
+    if (skin_total < 0.03 && skin_upper < 0.03 && skin_lower < 0.03) {
+        result.person_confidence *= 0.35;
+    }
     result.color_confidence = clamp01(result.person_confidence * 0.70 + clamp01(skin_total * 4.0) * 0.30);
     result.analysis_quality = quality_from_confidence(result.person_confidence);
     result.color_quality = color_quality_from_confidence(result.color_confidence);

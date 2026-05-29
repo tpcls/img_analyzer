@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -32,6 +33,11 @@ class YouTubeFrameFetcher:
         self.cache_ttl_seconds = 24 * 60 * 60
         self.search_ttl_seconds = 6 * 60 * 60
         self.stream_ttl_seconds = int(os.environ.get("YOUTUBE_STREAM_CACHE_TTL_SECONDS", "600"))
+        self.stream_frame_format = os.environ.get("STREAM_FRAME_FORMAT", "ppm").lower()
+        if self.stream_frame_format not in {"ppm", "jpg", "jpeg"}:
+            self.stream_frame_format = "ppm"
+        self.stream_frame_workers = max(1, int(os.environ.get("STREAM_FRAME_WORKERS", "4")))
+        self.auto_sample_weak_vote = os.environ.get("AUTO_SAMPLE_WEAK_VOTE", "0") == "1"
         self.yt_dlp_upgrade_interval_seconds = int(
             float(os.environ.get("YT_DLP_UPGRADE_INTERVAL_HOURS", "24")) * 60 * 60
         )
@@ -483,82 +489,76 @@ class YouTubeFrameFetcher:
         return {key: value for key, value in stream.items() if key != "stream_url"}
 
     def extract_sample_frames_from_stream(self, stream_url, cache_id, seconds=(5, 10, 15), prefix="sample", max_height=720):
-        video_key = self.cache_key(f"stream|{cache_id}|h={max_height}|w={self.frame_width}")
+        frame_ext = "jpg" if self.stream_frame_format in {"jpg", "jpeg"} else "ppm"
+        video_key = self.cache_key(f"stream|{cache_id}|h={max_height}|w={self.frame_width}|fmt={frame_ext}")
         frames = []
         missing_seconds = []
 
         for second in seconds:
-            fp = self.frame_cache_dir / f"{prefix}-{video_key}-{second}.jpg"
+            fp = self.frame_cache_dir / f"{prefix}-{video_key}-{second}.{frame_ext}"
             if fp.exists() and time.time() - fp.stat().st_mtime <= self.cache_ttl_seconds:
                 frames.append(self.frame_payload(fp, second, cached=True))
             else:
                 missing_seconds.append(second)
 
         if missing_seconds:
-            select_parts = "+".join(f"gte(t\\,{s})*lt(t\\,{s + 1})" for s in missing_seconds)
-            tmp_pattern = str(self.frame_cache_dir / f"_stream-{video_key}-{prefix}-%d.jpg")
-            cmd = [
-                self.ffmpeg,
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-y",
-                "-nostdin",
-                "-i",
-                stream_url,
-                "-an",
-                "-sn",
-                "-dn",
-                "-vf",
-                f"select='{select_parts}',scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
-                "-vsync",
-                "0",
-                "-frames:v",
-                str(len(missing_seconds)),
-                "-q:v",
-                "4",
-                tmp_pattern,
-            ]
-            subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-
-            for idx, second in enumerate(sorted(missing_seconds), start=1):
-                src = Path(tmp_pattern.replace("%d", str(idx)))
-                dst = self.frame_cache_dir / f"{prefix}-{video_key}-{second}.jpg"
-                if src.exists():
-                    src.replace(dst)
-
-                if not dst.exists():
-                    fallback_cmd = [
-                        self.ffmpeg,
-                        "-hide_banner",
-                        "-loglevel",
-                        "error",
-                        "-y",
-                        "-nostdin",
-                        "-ss",
-                        str(second),
-                        "-i",
-                        stream_url,
-                        "-an",
-                        "-sn",
-                        "-dn",
-                        "-frames:v",
-                        "1",
-                        "-vf",
-                        f"scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
-                        "-q:v",
-                        "4",
-                        str(dst),
+            if self.stream_frame_workers > 1 and len(missing_seconds) > 1:
+                with ThreadPoolExecutor(max_workers=min(self.stream_frame_workers, len(missing_seconds))) as executor:
+                    futures = [
+                        executor.submit(
+                            self.extract_single_stream_frame,
+                            stream_url,
+                            video_key,
+                            second,
+                            prefix,
+                            frame_ext,
+                        )
+                        for second in missing_seconds
                     ]
-                    subprocess.run(fallback_cmd, capture_output=True, text=True, timeout=30)
-
-                if dst.exists():
-                    frames.append(self.frame_payload(dst, second, cached=False))
-
-            for leftover in self.frame_cache_dir.glob(f"_stream-{video_key}-{prefix}-*.jpg"):
-                leftover.unlink(missing_ok=True)
+                    for future in as_completed(futures):
+                        frame = future.result()
+                        if frame:
+                            frames.append(frame)
+                return sorted(frames, key=lambda f: f["second"])
+            for second in missing_seconds:
+                frame = self.extract_single_stream_frame(stream_url, video_key, second, prefix, frame_ext)
+                if frame:
+                    frames.append(frame)
 
         return sorted(frames, key=lambda f: f["second"])
+
+    def extract_single_stream_frame(self, stream_url, video_key, second, prefix, frame_ext):
+        dst = self.frame_cache_dir / f"{prefix}-{video_key}-{second}.{frame_ext}"
+        tmp_path = self.frame_cache_dir / f".{prefix}-{video_key}-{second}-{os.getpid()}-{int(time.time() * 1000)}.tmp.{frame_ext}"
+        cmd = [
+            self.ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-nostdin",
+            "-ss",
+            str(second),
+            "-i",
+            stream_url,
+            "-an",
+            "-sn",
+            "-dn",
+            "-frames:v",
+            "1",
+            "-vf",
+            f"scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
+        ]
+        if frame_ext == "jpg":
+            cmd.extend(["-q:v", "4"])
+        cmd.extend(["-f", "image2", str(tmp_path)])
+        subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if tmp_path.exists():
+            tmp_path.replace(dst)
+        if dst.exists():
+            return self.frame_payload(dst, second, cached=False)
+        tmp_path.unlink(missing_ok=True)
+        return None
 
     def download_fancam(self, url, max_height=720, sample_end_seconds=None):
         self.maybe_upgrade_yt_dlp()
@@ -746,6 +746,9 @@ class YouTubeFrameFetcher:
         for frame in frames:
             source = Path(frame["file_path"])
             key = str(source.resolve())
+            if source.suffix.lower() == ".ppm" and source.exists():
+                ready[key] = {"ok": True, "ppm_path": str(source.resolve()), "cached": frame.get("cached", False)}
+                continue
             ppm_path = self.frame_ppm_path(source)
             if ppm_path.exists() and time.time() - ppm_path.stat().st_mtime <= self.cache_ttl_seconds:
                 ready[key] = {"ok": True, "ppm_path": str(ppm_path.resolve()), "cached": True}
@@ -945,14 +948,18 @@ class YouTubeFrameFetcher:
         aggregation = final.get("aggregation") or {}
         if len(output.get("frames") or []) < min_vote_frames:
             return True
-        if final and not final.get("usable", False):
+        low_confidence = (
+            float(analysis.get("person_confidence", 0.0)) < 0.30
+            or float(analysis.get("color_confidence", 0.0)) < 0.30
+        )
+        if final and not final.get("usable", False) and low_confidence:
             return True
         if analysis.get("lower_garment") == "unknown" or analysis.get("lower_garment_family") == "unknown":
             return True
         if int(aggregation.get("unknown_counts", {}).get("lower_garment", 0)) >= min_vote_frames:
             return True
         if float(analysis.get("lower_garment_vote_confidence", 0.0)) < 0.75 and len(output.get("frames") or []) < min_vote_frames + 3:
-            return True
+            return self.auto_sample_weak_vote
         return False
 
     def aggregate_clothing_results(self, frame_clothing, min_frames=7):
@@ -1053,11 +1060,24 @@ class YouTubeFrameFetcher:
 
         representative = selected[0]["item"]
         strict_usable = analysis["person_confidence"] >= 0.36 and analysis["color_confidence"] >= 0.40
-        vote_usable = (
-            analysis["lower_garment"] != "unknown"
-            and analysis["lower_garment_family"] != "unknown"
-            and analysis["lower_garment_vote_confidence"] >= 0.60
+        lower_label = analysis["lower_garment"]
+        lower_family = analysis["lower_garment_family"]
+        exact_lower_vote = (
+            analysis["lower_garment_vote_confidence"] >= 0.67
             and analysis["lower_garment_family_vote_confidence"] >= 0.60
+        )
+        short_family_vote = (
+            lower_label in {"mini_skirt", "shorts"}
+            and analysis["lower_garment_vote_confidence"] >= 0.50
+            and analysis["lower_garment_family_vote_confidence"] >= 0.85
+        )
+        stable_lower_vote = (
+            lower_label != "unknown"
+            and lower_family != "unknown"
+            and (exact_lower_vote or short_family_vote)
+        )
+        vote_usable = (
+            stable_lower_vote
             and analysis["person_confidence"] >= 0.30
             and analysis["color_confidence"] >= 0.34
         )
@@ -1065,7 +1085,7 @@ class YouTubeFrameFetcher:
             "second": representative.get("second"),
             "frame": representative.get("frame", {}),
             "result": {"ok": True, "analysis": analysis},
-            "usable": strict_usable or vote_usable,
+            "usable": (strict_usable or vote_usable) and stable_lower_vote,
             "lower_garment_decision": lower_garment_decision,
             "aggregation": {
                 "method": "majority_vote",
@@ -1088,7 +1108,7 @@ class YouTubeFrameFetcher:
             warnings.append("lower garment type was unknown in every voted frame; collect more frames or inspect manually")
         if not strict_usable:
             warnings.append("aggregated confidence is low; frame set is likely wide/group/poorly lit")
-        if result["usable"] and lower_garment_decision["needs_review"] and not all_lower_unknown:
+        if lower_garment_decision["needs_review"] and not all_lower_unknown:
             warnings.append("lower garment vote is weak; add more frames or inspect manually")
         if (
             analysis.get("color_quality") == "medium"

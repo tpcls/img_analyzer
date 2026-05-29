@@ -144,6 +144,9 @@ curl -X POST http://localhost:8000/analyze \
 - `DEFAULT_MAX_HEIGHT`: 서버 기본 YouTube 스트림 높이. 기본값 `480`
 - `YOUTUBE_FRAME_SOURCE`: `stream`이면 영상 파일 저장 없이 프레임만 추출, `download`이면 기존 구간 다운로드 방식. 기본값 `stream`
 - `YOUTUBE_STREAM_CACHE_TTL_SECONDS`: YouTube 스트림 URL 캐시 시간. 기본값 `600`
+- `STREAM_FRAME_FORMAT`: 스트림 프레임 저장 형식. `ppm`이면 변환 없이 C 모델에 바로 넣습니다. 기본값 `ppm`
+- `STREAM_FRAME_WORKERS`: 스트림 프레임을 병렬 추출할 ffmpeg 작업 수. 기본값 `4`, 저사양이면 `1`
+- `AUTO_SAMPLE_WEAK_VOTE`: `1`이면 하의 투표가 약할 때 75/90/120초 프레임을 추가 수집합니다. 기본값 `0`
 - `INCLUDE_THUMBNAIL`: `1`이면 서버 응답에 썸네일 다운로드 결과를 포함합니다. 기본값은 제외
 - `INCLUDE_THUMBNAIL_ANALYSIS`: `1`이면 썸네일 의상 분석을 포함합니다. 기본값은 제외
 - `SERV_API_API`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
