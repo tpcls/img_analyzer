@@ -1,6 +1,7 @@
 import express from 'express';
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,7 +12,8 @@ const app = express();
 const port = Number(process.env.PORT || 8000);
 const host = process.env.HOST || '0.0.0.0';
 const pythonBin = process.env.PYTHON_BIN || path.join(__dirname, '.venv', 'bin', 'python');
-const maxJobs = Math.max(1, Number(process.env.MAX_JOBS || 1));
+const defaultMaxJobs = Math.min(4, Math.max(2, Math.floor((os.availableParallelism?.() || os.cpus().length || 2) / 2)));
+const maxJobs = Math.max(1, Number(process.env.MAX_JOBS || defaultMaxJobs));
 const maxQueue = Math.max(0, Number(process.env.MAX_QUEUE || 20));
 const requestTimeoutMs = Math.max(10_000, Number(process.env.REQUEST_TIMEOUT_MS || 900_000));
 const maxBodyBytes = process.env.MAX_BODY_BYTES || '16kb';

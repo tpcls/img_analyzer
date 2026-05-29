@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -39,6 +40,7 @@ class YouTubeFrameFetcher:
         if self.stream_frame_format not in {"ppm", "jpg", "jpeg"}:
             self.stream_frame_format = "ppm"
         self.stream_frame_workers = max(1, int(os.environ.get("STREAM_FRAME_WORKERS", "4")))
+        self.analysis_workers = max(1, int(os.environ.get("ANALYSIS_WORKERS", "4")))
         self.auto_sample_weak_vote = os.environ.get("AUTO_SAMPLE_WEAK_VOTE", "0") == "1"
         self.lower_garment_model = None
         model_path = os.environ.get("LOWER_GARMENT_MODEL", str(self.base_dir / "lower_garment_model.json"))
@@ -873,10 +875,15 @@ class YouTubeFrameFetcher:
         analyzer = self.ensure_analyzer()
         if not analyzer.get("ok"):
             return analyzer
+        if len(ppm_paths) > 3 and self.analysis_workers > 1:
+            return self.run_c_model_batch_parallel(analyzer["path"], ppm_paths)
+        return self.run_c_model_process(analyzer["path"], ppm_paths)
+
+    def run_c_model_process(self, analyzer_path, ppm_paths):
         run_env = os.environ.copy()
         run_env["LC_ALL"] = "C"
         result = subprocess.run(
-            [analyzer["path"], *ppm_paths],
+            [analyzer_path, *ppm_paths],
             cwd=self.base_dir,
             capture_output=True,
             text=True,
@@ -893,6 +900,30 @@ class YouTubeFrameFetcher:
 
         if isinstance(analyses, dict):
             analyses = [analyses]
+        return {"ok": True, "analyses": analyses}
+
+    def run_c_model_batch_parallel(self, analyzer_path, ppm_paths):
+        workers = min(self.analysis_workers, len(ppm_paths))
+        chunk_size = max(1, math.ceil(len(ppm_paths) / workers))
+        chunks = [
+            (index, ppm_paths[index : index + chunk_size])
+            for index in range(0, len(ppm_paths), chunk_size)
+        ]
+        analyses = [None] * len(ppm_paths)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(self.run_c_model_process, analyzer_path, chunk): (start, chunk)
+                for start, chunk in chunks
+            }
+            for future in as_completed(futures):
+                start, chunk = futures[future]
+                result = future.result()
+                if not result.get("ok"):
+                    return result
+                for offset, analysis in enumerate(result["analyses"]):
+                    analyses[start + offset] = analysis
+        if any(analysis is None for analysis in analyses):
+            return {"ok": False, "error": "parallel clothing analyzer returned incomplete results"}
         return {"ok": True, "analyses": analyses}
 
     def attach_lower_garment_model_prediction(self, analysis):

@@ -135,7 +135,7 @@ curl -X POST http://localhost:8000/analyze \
 - `PORT`: 서버 포트. 기본값 `8000`
 - `HOST`: 바인딩 호스트. 기본값 `0.0.0.0`
 - `PYTHON_BIN`: 사용할 Python 경로. 기본값 `.venv/bin/python`
-- `MAX_JOBS`: 동시에 처리할 분석 작업 수. 기본값 `1`
+- `MAX_JOBS`: 동시에 처리할 분석 작업 수. 기본값은 CPU에 따라 자동 설정, 최소 `2`
 - `MAX_QUEUE`: 동시에 처리하지 못한 요청을 대기열에 쌓는 최대 개수. 기본값 `20`
 - `REQUEST_TIMEOUT_MS`: 요청 타임아웃. 기본값 `900000`
 - `RESULT_CACHE_TTL_MS`: 같은 URL/옵션 분석 결과를 메모리에 재사용하는 시간. 기본값 `300000`, `0`이면 비활성화
@@ -146,6 +146,7 @@ curl -X POST http://localhost:8000/analyze \
 - `YOUTUBE_STREAM_CACHE_TTL_SECONDS`: YouTube 스트림 URL 캐시 시간. 기본값 `600`
 - `STREAM_FRAME_FORMAT`: 스트림 프레임 저장 형식. `ppm`이면 변환 없이 C 모델에 바로 넣습니다. 기본값 `ppm`
 - `STREAM_FRAME_WORKERS`: 스트림 프레임을 병렬 추출할 ffmpeg 작업 수. 기본값 `4`, 저사양이면 `1`
+- `ANALYSIS_WORKERS`: 한 요청 안에서 C 모델 batch 분석을 병렬로 나눠 돌릴 작업 수. 기본값 `4`
 - `AUTO_SAMPLE_WEAK_VOTE`: `1`이면 하의 투표가 약할 때 75/90/120초 프레임을 추가 수집합니다. 기본값 `0`
 - `LOWER_GARMENT_MODEL`: 작은 하의 보조 모델 JSON 경로. 기본값 `lower_garment_model.json`, `0`이면 비활성화
 - `INCLUDE_THUMBNAIL`: `1`이면 서버 응답에 썸네일 다운로드 결과를 포함합니다. 기본값은 제외
