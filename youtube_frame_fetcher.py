@@ -28,12 +28,15 @@ class YouTubeFrameFetcher:
         self.video_cache_dir = self.cache_dir / "videos"
         self.frame_cache_dir = self.cache_dir / "frames"
         self.ppm_cache_dir = self.cache_dir / "ppm"
+        self.stream_cache_dir = self.cache_dir / "streams"
         self.cache_ttl_seconds = 24 * 60 * 60
         self.search_ttl_seconds = 6 * 60 * 60
+        self.stream_ttl_seconds = int(os.environ.get("YOUTUBE_STREAM_CACHE_TTL_SECONDS", "600"))
         self.yt_dlp_upgrade_interval_seconds = int(
             float(os.environ.get("YT_DLP_UPGRADE_INTERVAL_HOURS", "24")) * 60 * 60
         )
         self.analysis_width = analysis_width
+        self.frame_width = int(os.environ.get("FRAME_CACHE_WIDTH", str(analysis_width)))
         self.yt_dlp = self.find_executable("yt-dlp")
         self.ffmpeg = self.find_executable("ffmpeg")
 
@@ -43,6 +46,7 @@ class YouTubeFrameFetcher:
             self.video_cache_dir,
             self.frame_cache_dir,
             self.ppm_cache_dir,
+            self.stream_cache_dir,
         ):
             directory.mkdir(parents=True, exist_ok=True)
 
@@ -399,6 +403,163 @@ class YouTubeFrameFetcher:
             return 0
         return max(30, int(max(sample_points)) + 5)
 
+    def video_format_selectors(self, max_height=720, include_audio_fallback=True):
+        selectors = [
+            (
+                f"bv*[vcodec^=avc1][height<={max_height}][ext=mp4]/"
+                f"bv*[vcodec!=none][height<={max_height}][ext=mp4]/"
+                f"bv*[vcodec!=none][height<={max_height}]/"
+                f"b[vcodec!=none][height<={max_height}][ext=mp4]/"
+                f"b[vcodec!=none][height<={max_height}]"
+            ),
+            (
+                f"bv*[height<={max_height}]/"
+                f"bestvideo[height<={max_height}]/"
+                f"b[height<={max_height}]/"
+                f"bestvideo[height<={max_height}]+bestaudio/"
+                f"best[height<={max_height}]"
+            ),
+            "bv*/bestvideo/b[vcodec!=none]/best",
+        ]
+        if include_audio_fallback:
+            selectors.append("bv*+ba/bestvideo+bestaudio/best")
+        return selectors
+
+    def get_video_stream_url(self, url, max_height=720):
+        self.maybe_upgrade_yt_dlp()
+        video_id = self.extract_youtube_id(url) or self.cache_key(url)
+        cache_path = self.stream_cache_dir / f"{video_id}-h{int(max_height)}.json"
+        cached = self.read_json_cache(cache_path, self.stream_ttl_seconds)
+        if cached and cached.get("stream_url"):
+            cached["cached"] = True
+            return cached
+
+        last_error = ""
+        result = None
+        youtube_client_args = [
+            [],
+            ["--extractor-args", "youtube:player_client=android,web"],
+            ["--extractor-args", "youtube:player_client=tv,web"],
+            ["--force-ipv4"],
+        ]
+        for client_args in youtube_client_args:
+            for format_selector in self.video_format_selectors(max_height, include_audio_fallback=False):
+                cmd = [
+                    *self.command_args(self.yt_dlp),
+                    "--no-playlist",
+                    "--no-warnings",
+                    *client_args,
+                    "--format",
+                    format_selector,
+                    "--get-url",
+                    url,
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+                if result.returncode == 0:
+                    break
+                last_error = (result.stderr or "yt-dlp stream URL failed").strip()[-800:]
+            if result and result.returncode == 0:
+                break
+
+        if result is None or result.returncode != 0:
+            return {"ok": False, "mode": "stream", "error": last_error or "yt-dlp stream URL failed"}
+
+        stream_url = next((line.strip() for line in result.stdout.splitlines() if line.strip().startswith("http")), "")
+        if not stream_url:
+            return {"ok": False, "mode": "stream", "error": "yt-dlp returned no video stream URL"}
+
+        payload = {
+            "ok": True,
+            "mode": "stream",
+            "video_id": video_id,
+            "max_height": int(max_height),
+            "stream_url": stream_url,
+            "cached": False,
+        }
+        self.write_json_cache(cache_path, payload)
+        return payload
+
+    def public_stream_payload(self, stream):
+        return {key: value for key, value in stream.items() if key != "stream_url"}
+
+    def extract_sample_frames_from_stream(self, stream_url, cache_id, seconds=(5, 10, 15), prefix="sample", max_height=720):
+        video_key = self.cache_key(f"stream|{cache_id}|h={max_height}|w={self.frame_width}")
+        frames = []
+        missing_seconds = []
+
+        for second in seconds:
+            fp = self.frame_cache_dir / f"{prefix}-{video_key}-{second}.jpg"
+            if fp.exists() and time.time() - fp.stat().st_mtime <= self.cache_ttl_seconds:
+                frames.append(self.frame_payload(fp, second, cached=True))
+            else:
+                missing_seconds.append(second)
+
+        if missing_seconds:
+            select_parts = "+".join(f"gte(t\\,{s})*lt(t\\,{s + 1})" for s in missing_seconds)
+            tmp_pattern = str(self.frame_cache_dir / f"_stream-{video_key}-{prefix}-%d.jpg")
+            cmd = [
+                self.ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-nostdin",
+                "-i",
+                stream_url,
+                "-an",
+                "-sn",
+                "-dn",
+                "-vf",
+                f"select='{select_parts}',scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
+                "-vsync",
+                "0",
+                "-frames:v",
+                str(len(missing_seconds)),
+                "-q:v",
+                "4",
+                tmp_pattern,
+            ]
+            subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+            for idx, second in enumerate(sorted(missing_seconds), start=1):
+                src = Path(tmp_pattern.replace("%d", str(idx)))
+                dst = self.frame_cache_dir / f"{prefix}-{video_key}-{second}.jpg"
+                if src.exists():
+                    src.replace(dst)
+
+                if not dst.exists():
+                    fallback_cmd = [
+                        self.ffmpeg,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-y",
+                        "-nostdin",
+                        "-ss",
+                        str(second),
+                        "-i",
+                        stream_url,
+                        "-an",
+                        "-sn",
+                        "-dn",
+                        "-frames:v",
+                        "1",
+                        "-vf",
+                        f"scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
+                        "-q:v",
+                        "4",
+                        str(dst),
+                    ]
+                    subprocess.run(fallback_cmd, capture_output=True, text=True, timeout=30)
+
+                if dst.exists():
+                    frames.append(self.frame_payload(dst, second, cached=False))
+
+            for leftover in self.frame_cache_dir.glob(f"_stream-{video_key}-{prefix}-*.jpg"):
+                leftover.unlink(missing_ok=True)
+
+        return sorted(frames, key=lambda f: f["second"])
+
     def download_fancam(self, url, max_height=720, sample_end_seconds=None):
         self.maybe_upgrade_yt_dlp()
         video_id = self.extract_youtube_id(url)
@@ -407,22 +568,7 @@ class YouTubeFrameFetcher:
         if cached:
             return self.file_payload(cached, cached=True)
 
-        format_selectors = [
-            (
-                f"bv*[vcodec^=avc1][height<={max_height}][ext=mp4]+ba[acodec^=mp4a][ext=m4a]/"
-                f"bv*[vcodec!=none][height<={max_height}][ext=mp4]+ba[acodec!=none]/"
-                f"b[vcodec!=none][height<={max_height}][ext=mp4]/"
-                f"bv*[vcodec!=none][height<={max_height}]+ba[acodec!=none]/"
-                f"b[vcodec!=none][height<={max_height}]"
-            ),
-            (
-                f"bv*[height<={max_height}]+ba/"
-                f"b[height<={max_height}]/"
-                f"bestvideo[height<={max_height}]+bestaudio/"
-                f"best[height<={max_height}]"
-            ),
-            "bv*+ba/bestvideo+bestaudio/best",
-        ]
+        format_selectors = self.video_format_selectors(max_height)
         sample_suffix = f" h{int(max_height)}s{sample_end_seconds}" if sample_end_seconds else ""
         output_template = str(self.video_cache_dir / f"%(title).120s [%(id)s]{sample_suffix}.%(ext)s")
         last_error = ""
@@ -451,6 +597,7 @@ class YouTubeFrameFetcher:
                         "2",
                         "--fragment-retries",
                         "2",
+                        "--no-mtime",
                         "--no-part",
                         *client_args,
                         *section_args,
@@ -509,11 +656,18 @@ class YouTubeFrameFetcher:
             tmp_pattern = str(self.frame_cache_dir / f"_batch-{video_key}-{prefix}-%d.jpg")
             cmd = [
                 self.ffmpeg,
+                "-hide_banner",
+                "-loglevel",
+                "error",
                 "-y",
+                "-nostdin",
                 "-i",
                 str(video),
+                "-an",
+                "-sn",
+                "-dn",
                 "-vf",
-                f"select='{select_parts}',scale=640:-2:force_original_aspect_ratio=decrease",
+                f"select='{select_parts}',scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
                 "-vsync",
                 "0",
                 "-frames:v",
@@ -533,15 +687,22 @@ class YouTubeFrameFetcher:
                 if not dst.exists():
                     fallback_cmd = [
                         self.ffmpeg,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
                         "-y",
+                        "-nostdin",
                         "-ss",
                         str(second),
                         "-i",
                         str(video),
+                        "-an",
+                        "-sn",
+                        "-dn",
                         "-frames:v",
                         "1",
                         "-vf",
-                        "scale=640:-2:force_original_aspect_ratio=decrease",
+                        f"scale={self.frame_width}:-2:force_original_aspect_ratio=decrease",
                         "-q:v",
                         "4",
                         str(dst),
@@ -596,7 +757,7 @@ class YouTubeFrameFetcher:
 
         tmp_token = f"{os.getpid()}-{int(time.time() * 1000)}"
         tmp_paths = []
-        cmd = [self.ffmpeg, "-y"]
+        cmd = [self.ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-nostdin"]
         for _, source, _ in missing:
             cmd.extend(["-i", str(source)])
         for idx, (_, _, ppm_path) in enumerate(missing):
@@ -677,7 +838,11 @@ class YouTubeFrameFetcher:
         tmp_path = ppm_path.with_name(f".{ppm_path.stem}.{os.getpid()}-{int(time.time() * 1000)}.tmp.ppm")
         convert_cmd = [
             self.ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
             "-y",
+            "-nostdin",
             "-i",
             str(source),
             "-vf",
@@ -992,6 +1157,7 @@ class YouTubeFrameFetcher:
         analyze_clothing=True,
         skip_video=False,
         no_auto_sample=False,
+        include_thumbnail=True,
         include_thumbnail_analysis=False,
     ):
         selected = {
@@ -1015,12 +1181,17 @@ class YouTubeFrameFetcher:
                 )
                 thumbnail_url = selected["thumbnail_url"]
                 selected["query_match"] = self.score_search_result(query, selected["title"])
+        thumbnail = (
+            self.get_thumbnail_frame(url, thumbnail_url)
+            if include_thumbnail or include_thumbnail_analysis
+            else {"ok": False, "skipped": True}
+        )
         output = {
             "ok": True,
             "query": query,
             "selected": selected,
             "search_results": [selected],
-            "thumbnail": self.get_thumbnail_frame(url, thumbnail_url),
+            "thumbnail": thumbnail,
         }
         warnings = []
         if video_info and not video_info.get("ok"):
@@ -1037,28 +1208,49 @@ class YouTubeFrameFetcher:
         if skip_video:
             return output
 
-        video = self.download_fancam(
-            url,
-            max_height=max_height,
-            sample_end_seconds=self.sample_end_seconds(seconds, auto_seconds, enabled=not no_auto_sample),
-        )
-        output["video"] = video
-        if not video.get("ok"):
-            output["ok"] = False
-            output["error"] = video.get("error", "video download failed")
-            return output
+        initial_sample_end = self.sample_end_seconds(seconds)
+        video = None
+        stream = None
+        output["frames"] = []
+        use_stream = os.environ.get("YOUTUBE_FRAME_SOURCE", "stream").lower() not in {"download", "file", "local"}
+        if use_stream:
+            stream = self.get_video_stream_url(url, max_height=max_height)
+            if stream.get("ok"):
+                output["video"] = self.public_stream_payload(stream)
+                output["frames"] = self.extract_sample_frames_from_stream(
+                    stream["stream_url"],
+                    selected["id"] or url,
+                    seconds=seconds,
+                    prefix="youtube-only",
+                    max_height=max_height,
+                )
+            else:
+                output["video_stream"] = self.public_stream_payload(stream)
 
-        output["frames"] = self.extract_sample_frames(
-            video["file_path"],
-            seconds=seconds,
-            prefix="youtube-only",
-        )
+        if len(output["frames"]) < len(seconds):
+            stream = None
+            video = self.download_fancam(
+                url,
+                max_height=max_height,
+                sample_end_seconds=initial_sample_end,
+            )
+            output["video"] = video
+            if not video.get("ok"):
+                output["ok"] = False
+                output["error"] = video.get("error", "video download failed")
+                return output
+
+            output["frames"] = self.extract_sample_frames(
+                video["file_path"],
+                seconds=seconds,
+                prefix="youtube-only",
+            )
         if not analyze_clothing:
             return output
 
         output["frame_clothing"] = self.analyze_frames_with_c_model(
             output["frames"],
-            video_path=video["file_path"],
+            video_path=(video or {}).get("file_path"),
             prefix="youtube-only",
         )
         output["best_frame_clothing"] = self.select_best_clothing_result(output["frame_clothing"])
@@ -1072,17 +1264,40 @@ class YouTubeFrameFetcher:
             extra_seconds = tuple(s for s in auto_seconds if s not in already)
             output["auto_sampled"] = False
             if extra_seconds:
-                extra_frames = self.extract_sample_frames(
-                    video["file_path"],
-                    seconds=extra_seconds,
-                    prefix="youtube-only",
-                )
+                if stream and stream.get("ok"):
+                    extra_frames = self.extract_sample_frames_from_stream(
+                        stream["stream_url"],
+                        selected["id"] or url,
+                        seconds=extra_seconds,
+                        prefix="youtube-only",
+                        max_height=max_height,
+                    )
+                else:
+                    extra_video = video
+                    extra_sample_end = self.sample_end_seconds(extra_seconds)
+                    if extra_sample_end > initial_sample_end:
+                        extra_video = self.download_fancam(
+                            url,
+                            max_height=max_height,
+                            sample_end_seconds=extra_sample_end,
+                        )
+                        output["video_extended"] = extra_video
+                        if not extra_video.get("ok"):
+                            output.setdefault("warnings", []).append(
+                                "additional sampling was skipped because extended video download failed"
+                            )
+                            return output
+                    extra_frames = self.extract_sample_frames(
+                        extra_video["file_path"],
+                        seconds=extra_seconds,
+                        prefix="youtube-only",
+                    )
                 output["frames"] = self.merge_frames(output["frames"], extra_frames)
                 output["frame_clothing"] = self.merge_frame_clothing(
                     output["frame_clothing"],
                     self.analyze_frames_with_c_model(
                         extra_frames,
-                        video_path=video["file_path"],
+                        video_path=(video or {}).get("file_path"),
                         prefix="youtube-only",
                     ),
                 )
@@ -1100,6 +1315,43 @@ def parse_seconds(value):
     return tuple(int(v.strip()) for v in value.split(",") if v.strip())
 
 
+def compact_clothing_entry(entry, include_decision=False):
+    if not entry:
+        return entry
+    result = entry.get("result") or {}
+    compact = {
+        "second": entry.get("second"),
+        "usable": entry.get("usable"),
+        "result": {"ok": result.get("ok", False), "analysis": result.get("analysis", {})},
+    }
+    if include_decision:
+        compact["lower_garment_decision"] = entry.get("lower_garment_decision")
+        compact["aggregation"] = entry.get("aggregation")
+    if entry.get("warnings"):
+        compact["warnings"] = entry.get("warnings")
+    return compact
+
+
+def summarize_output(output):
+    summary = {
+        "ok": output.get("ok", False),
+        "query": output.get("query", ""),
+        "selected": output.get("selected", {}),
+        "video": output.get("video", {}),
+        "thumbnail": output.get("thumbnail", {}),
+        "frames_count": len(output.get("frames") or []),
+        "sampled_seconds": [frame.get("second") for frame in output.get("frames") or []],
+        "auto_sampled": output.get("auto_sampled", False),
+        "best_frame_clothing": compact_clothing_entry(output.get("best_frame_clothing")),
+        "final_clothing": compact_clothing_entry(output.get("final_clothing"), include_decision=True),
+        "warnings": output.get("warnings", []),
+    }
+    for key in ("error", "link_query_mismatch", "video_metadata", "video_stream", "video_extended"):
+        if key in output:
+            summary[key] = output[key]
+    return summary
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--query", default="")
@@ -1113,6 +1365,9 @@ def main():
     parser.add_argument("--skip-video", action="store_true")
     parser.add_argument("--analyze-clothing", action="store_true")
     parser.add_argument("--no-auto-sample", action="store_true")
+    parser.add_argument("--skip-thumbnail", action="store_true")
+    parser.add_argument("--include-thumbnail-analysis", action="store_true")
+    parser.add_argument("--summary-only", action="store_true")
     args = parser.parse_args()
 
     fetcher = YouTubeFrameFetcher(analysis_width=args.analysis_width)
@@ -1127,9 +1382,12 @@ def main():
             analyze_clothing=args.analyze_clothing,
             skip_video=args.skip_video,
             no_auto_sample=args.no_auto_sample,
-            include_thumbnail_analysis=True,
+            include_thumbnail=not args.skip_thumbnail,
+            include_thumbnail_analysis=args.include_thumbnail_analysis,
         )
-        print(json.dumps(output, ensure_ascii=False, indent=2))
+        if args.summary_only:
+            output = summarize_output(output)
+        print(json.dumps(output, ensure_ascii=False, separators=(",", ":") if args.summary_only else None, indent=None if args.summary_only else 2))
         return
     else:
         if not args.query:
@@ -1149,7 +1407,7 @@ def main():
         "search_results": fancams,
         "thumbnail": thumbnail,
     }
-    if args.analyze_clothing and thumbnail.get("ok"):
+    if args.include_thumbnail_analysis and args.analyze_clothing and thumbnail.get("ok"):
         output["thumbnail_clothing"] = fetcher.analyze_with_c_model(thumbnail["file_path"])
 
     if not args.skip_video:
@@ -1158,12 +1416,9 @@ def main():
         video = fetcher.download_fancam(
             selected["url"],
             max_height=args.max_height,
-            sample_end_seconds=fetcher.sample_end_seconds(
-                initial_seconds,
-                auto_seconds,
-                enabled=not args.no_auto_sample,
-            ),
+            sample_end_seconds=fetcher.sample_end_seconds(initial_seconds),
         )
+        initial_sample_end = fetcher.sample_end_seconds(initial_seconds)
         output["video"] = video
         if video.get("ok"):
             output["frames"] = fetcher.extract_sample_frames(
@@ -1187,8 +1442,25 @@ def main():
                     extra_seconds = tuple(s for s in parse_seconds(args.auto_seconds) if s not in already)
                     output["auto_sampled"] = False
                     if extra_seconds:
+                        extra_video = video
+                        extra_sample_end = fetcher.sample_end_seconds(extra_seconds)
+                        if extra_sample_end > initial_sample_end:
+                            extra_video = fetcher.download_fancam(
+                                selected["url"],
+                                max_height=args.max_height,
+                                sample_end_seconds=extra_sample_end,
+                            )
+                            output["video_extended"] = extra_video
+                            if not extra_video.get("ok"):
+                                output.setdefault("warnings", []).append(
+                                    "additional sampling was skipped because extended video download failed"
+                                )
+                                if args.summary_only:
+                                    output = summarize_output(output)
+                                print(json.dumps(output, ensure_ascii=False, separators=(",", ":") if args.summary_only else None, indent=None if args.summary_only else 2))
+                                return
                         extra_frames = fetcher.extract_sample_frames(
-                            video["file_path"],
+                            extra_video["file_path"],
                             seconds=extra_seconds,
                             prefix="youtube-only",
                         )
@@ -1208,7 +1480,9 @@ def main():
                         )
                         output["auto_sampled"] = True
 
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    if args.summary_only:
+        output = summarize_output(output)
+    print(json.dumps(output, ensure_ascii=False, separators=(",", ":") if args.summary_only else None, indent=None if args.summary_only else 2))
 
 
 if __name__ == "__main__":

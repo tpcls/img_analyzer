@@ -18,6 +18,8 @@ const maxBodyBytes = process.env.MAX_BODY_BYTES || '16kb';
 const apiKey = process.env.SERV_API_API || process.env.SERV_API_KEY || '';
 const resultCacheTtlMs = Math.max(0, Number(process.env.RESULT_CACHE_TTL_MS || 300_000));
 const resultCacheMax = Math.max(1, Number(process.env.RESULT_CACHE_MAX || 50));
+const defaultAnalysisWidth = Math.max(160, Number(process.env.DEFAULT_ANALYSIS_WIDTH || 384));
+const defaultMaxHeight = Math.max(144, Number(process.env.DEFAULT_MAX_HEIGHT || 480));
 
 let activeJobs = 0;
 const pendingJobs = [];
@@ -167,9 +169,9 @@ function analyzeWithPython(payload) {
       payload.url,
       '--analyze-clothing',
       '--analysis-width',
-      String(intValue(payload.analysis_width, 384)),
+      String(intValue(payload.analysis_width, defaultAnalysisWidth)),
       '--max-height',
-      String(intValue(payload.max_height, 480)),
+      String(intValue(payload.max_height, defaultMaxHeight)),
       '--min-vote-frames',
       String(intValue(payload.min_vote_frames, 7)),
       '--seconds',
@@ -181,6 +183,15 @@ function analyzeWithPython(payload) {
     if (payload.no_auto_sample) {
       args.push('--no-auto-sample');
     }
+    if (payload.include_thumbnail_analysis || process.env.INCLUDE_THUMBNAIL_ANALYSIS === '1') {
+      args.push('--include-thumbnail-analysis');
+    }
+    if (!payload.include_thumbnail && !payload.include_thumbnail_analysis && process.env.INCLUDE_THUMBNAIL !== '1') {
+      args.push('--skip-thumbnail');
+    }
+    if (!payload.full_output) {
+      args.push('--summary-only');
+    }
     if (payload.skip_video) {
       args.push('--skip-video');
     }
@@ -190,7 +201,7 @@ function analyzeWithPython(payload) {
 
     const child = spawn(pythonBin, args, {
       cwd: __dirname,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' },
+      env: { ...process.env, PYTHONUNBUFFERED: '1', PYTHONWARNINGS: process.env.PYTHONWARNINGS || 'ignore' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -269,13 +280,16 @@ function analysisJobKey(payload) {
   return JSON.stringify({
     url: payload.url,
     query: typeof payload.query === 'string' ? payload.query : '',
-    analysis_width: intValue(payload.analysis_width, 384),
-    max_height: intValue(payload.max_height, 480),
+    analysis_width: intValue(payload.analysis_width, defaultAnalysisWidth),
+    max_height: intValue(payload.max_height, defaultMaxHeight),
     min_vote_frames: intValue(payload.min_vote_frames, 7),
     seconds: secondsValue(payload.seconds, '5,10,15,20,30,45,60'),
     auto_seconds: secondsValue(payload.auto_seconds, '5,10,15,20,30,45,60,75,90,120'),
     no_auto_sample: Boolean(payload.no_auto_sample),
     skip_video: Boolean(payload.skip_video),
+    include_thumbnail: Boolean(payload.include_thumbnail || process.env.INCLUDE_THUMBNAIL === '1'),
+    include_thumbnail_analysis: Boolean(payload.include_thumbnail_analysis || process.env.INCLUDE_THUMBNAIL_ANALYSIS === '1'),
+    full_output: Boolean(payload.full_output),
   });
 }
 

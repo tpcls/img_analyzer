@@ -140,13 +140,21 @@ curl -X POST http://localhost:8000/analyze \
 - `REQUEST_TIMEOUT_MS`: 요청 타임아웃. 기본값 `900000`
 - `RESULT_CACHE_TTL_MS`: 같은 URL/옵션 분석 결과를 메모리에 재사용하는 시간. 기본값 `300000`, `0`이면 비활성화
 - `RESULT_CACHE_MAX`: 메모리에 유지할 분석 결과 최대 개수. 기본값 `50`
+- `DEFAULT_ANALYSIS_WIDTH`: 서버 기본 분석 폭. 기본값 `384`
+- `DEFAULT_MAX_HEIGHT`: 서버 기본 YouTube 스트림 높이. 기본값 `480`
+- `YOUTUBE_FRAME_SOURCE`: `stream`이면 영상 파일 저장 없이 프레임만 추출, `download`이면 기존 구간 다운로드 방식. 기본값 `stream`
+- `YOUTUBE_STREAM_CACHE_TTL_SECONDS`: YouTube 스트림 URL 캐시 시간. 기본값 `600`
+- `INCLUDE_THUMBNAIL`: `1`이면 서버 응답에 썸네일 다운로드 결과를 포함합니다. 기본값은 제외
+- `INCLUDE_THUMBNAIL_ANALYSIS`: `1`이면 썸네일 의상 분석을 포함합니다. 기본값은 제외
 - `SERV_API_API`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
 - `SERV_API_KEY`: `SERV_API_API`와 같은 용도의 호환 환경 변수입니다.
 - `YT_DLP_UPGRADE_INTERVAL_HOURS`: `yt-dlp` 자동 업그레이드 체크 주기. 기본값 `24`, `0`이면 비활성화
 
 동일한 URL/옵션 요청이 동시에 들어오면 서버가 중복으로 다운로드/분석하지 않고 하나의 작업 결과를 여러 응답에 나눠줍니다. 반복 호출은 짧은 시간 동안 `cached_response: true`로 빠르게 반환됩니다.
 
-분석용 비디오는 기본 샘플/자동 샘플에 필요한 앞 구간만 내려받도록 캐시됩니다. 예를 들어 기본 설정은 120초 샘플까지 필요하므로 약 125초 구간을 우선 캐시하고, 같은 URL/옵션이면 다음 요청에서 재사용합니다.
+서버 기본 응답은 `summary-only`라서 프레임별 원본 로그를 빼고 `final_clothing` 중심으로 반환합니다. 전체 프레임 로그가 필요하면 요청 JSON에 `"full_output": true`를 넣으면 됩니다.
+
+기본 분석 경로는 YouTube 영상을 파일로 저장하지 않고 스트림 URL에서 필요한 프레임만 추출합니다. 스트림 추출이 실패하면 기존처럼 필요한 앞 구간만 내려받는 방식으로 자동 전환됩니다.
 
 - `usable`: 분석 결과를 실제로 써도 되는지 여부
 - `person_confidence`: 단일 인물 박스 신뢰도
