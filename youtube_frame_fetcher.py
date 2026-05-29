@@ -1130,8 +1130,14 @@ class YouTubeFrameFetcher:
                 analysis["pants_length"] = "unknown"
         elif (
             model_strong
-            and analysis["lower_garment_vote_confidence"] < 0.75
-            and model_label != analysis["lower_garment"]
+            and (
+                analysis["lower_garment_vote_confidence"] < 0.75
+                or analysis["lower_garment_known_frames"] < min_frames
+            )
+            and (
+                model_label != analysis["lower_garment"]
+                or analysis["lower_garment_known_frames"] < min(4, min_frames)
+            )
         ):
             analysis["lower_garment"] = model_label
             analysis["lower_garment_family"] = lower_garment_family(model_label)

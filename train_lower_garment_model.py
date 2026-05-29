@@ -7,6 +7,30 @@ from lower_garment_model import DEFAULT_MODEL_PATH, save_model, train_softmax, v
 from youtube_frame_fetcher import YouTubeFrameFetcher
 
 
+EXTRA_FRAME_LABELS = {
+    "HmStZ8eQD98 gray wide skirt": {
+        "prefix": "youtube-only-7e9c442392595cc79cf27b511c4f7b58c61bbe08",
+        "label": "mini_skirt",
+    },
+    "jXcU22lLPlc black mini skirt": {
+        "prefix": "youtube-only-d75ee9462fb527b9c2233a3a82fc6f2e61b21b2f",
+        "label": "mini_skirt",
+    },
+    "l_lRA0DytNE black mini skirt": {
+        "prefix": "youtube-only-2acc4c26f1a24498e3a4ad7466297804ad898519",
+        "label": "mini_skirt",
+    },
+    "cSXqwcLsVPc dark shorts": {
+        "prefix": "youtube-only-c9c31ce31de698480adbe62cbeb2ddfc731aae56",
+        "label": "shorts",
+    },
+    "erNe2L0beR0 black mini skirt": {
+        "prefix": "youtube-only-457426eca9078ad568a3be23df4814bd33d01f4e",
+        "label": "mini_skirt",
+    },
+}
+
+
 def collect_labels(frame_dir):
     labels = {}
     for sample in GOLDEN_SAMPLES:
@@ -31,6 +55,13 @@ def collect_labels(frame_dir):
             labels.setdefault(path.name, label)
         for path in frame_dir.glob(f"{prefix}-*.ppm"):
             labels.setdefault(path.name, label)
+    for extra in EXTRA_FRAME_LABELS.values():
+        prefix = extra["prefix"]
+        label = extra["label"]
+        for path in frame_dir.glob(f"{prefix}-*.jpg"):
+            labels[path.name] = label
+        for path in frame_dir.glob(f"{prefix}-*.ppm"):
+            labels[path.name] = label
     return labels
 
 
