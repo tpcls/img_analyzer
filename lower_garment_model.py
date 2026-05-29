@@ -3,7 +3,7 @@ import math
 from pathlib import Path
 
 
-MODEL_VERSION = 1
+MODEL_VERSION = 2
 DEFAULT_MODEL_PATH = Path(__file__).with_name("lower_garment_model.json")
 
 NUMERIC_FEATURES = [
@@ -36,6 +36,22 @@ CATEGORICAL_FEATURES = {
     "lower_color": ["unknown", "black", "white", "gray", "pink", "purple", "red", "orange", "blue", "green"],
 }
 
+DERIVED_FEATURES = [
+    "skin_delta",
+    "skin_total_signal",
+    "lower_visibility",
+    "coverage_skin_mix",
+    "center_split_gap",
+    "center_fill_x_coverage",
+    "split_x_lower_skin",
+    "upper_lower_skin_product",
+    "confidence_product",
+    "coverage_sq",
+    "lower_skin_sq",
+    "center_fill_sq",
+    "split_sq",
+]
+
 PANTS_GARMENTS = {"shorts", "knee_length_pants", "cropped_pants", "long_pants"}
 SKIRT_GARMENTS = {"mini_skirt", "knee_length_skirt", "midi_skirt", "long_skirt"}
 
@@ -62,6 +78,7 @@ def pants_length_for_label(label):
 
 def feature_names():
     names = list(NUMERIC_FEATURES)
+    names.extend(DERIVED_FEATURES)
     for key, values in CATEGORICAL_FEATURES.items():
         names.extend(f"{key}={value}" for value in values)
     return names
@@ -72,8 +89,34 @@ FEATURE_NAMES = feature_names()
 
 def vectorize_analysis(analysis):
     values = []
+    numeric = {}
     for key in NUMERIC_FEATURES:
-        values.append(float(analysis.get(key, 0.0) or 0.0))
+        numeric[key] = float(analysis.get(key, 0.0) or 0.0)
+        values.append(numeric[key])
+    upper_skin = numeric["upper_skin_ratio"]
+    lower_skin = numeric["lower_skin_ratio"]
+    coverage = numeric["lower_coverage_ratio"]
+    split = numeric["lower_split_ratio"]
+    center = numeric["lower_center_fill_ratio"]
+    person = numeric["person_confidence"]
+    color = numeric["color_confidence"]
+    values.extend(
+        [
+            upper_skin - lower_skin,
+            numeric["skin_ratio"] + lower_skin,
+            coverage * (1.0 - min(1.0, lower_skin)),
+            coverage * (lower_skin + 0.05),
+            center - split,
+            center * coverage,
+            split * lower_skin,
+            upper_skin * lower_skin,
+            person * color,
+            coverage * coverage,
+            lower_skin * lower_skin,
+            center * center,
+            split * split,
+        ]
+    )
     for key, options in CATEGORICAL_FEATURES.items():
         value = analysis.get(key) or "unknown"
         values.extend(1.0 if value == option else 0.0 for option in options)

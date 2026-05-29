@@ -142,6 +142,27 @@ def main():
             model_aggregate.get("usable") is False,
         ]
     )
+    override_frames = [
+        *[frame_item(second, "long_skirt", "skirt", "long", "mini_skirt", 0.82) for second in (5, 10, 15, 20)],
+        *[frame_item(second, "mini_skirt", "skirt", "shorts", "mini_skirt", 0.82) for second in (30, 45, 60)],
+    ]
+    override_aggregate = fetcher.aggregate_clothing_results(override_frames, min_frames=7)
+    override_analysis = (override_aggregate.get("result") or {}).get("analysis") or {}
+    override_decision = override_aggregate.get("lower_garment_decision", {})
+    output["model_override"] = {
+        "usable": override_aggregate.get("usable"),
+        "decision": override_decision,
+        "analysis": override_analysis,
+    }
+    checks.extend(
+        [
+            override_analysis.get("lower_garment") == "mini_skirt",
+            override_analysis.get("lower_garment_family") == "skirt",
+            override_decision.get("model_assisted") is True,
+            override_decision.get("reason") == "model_override_weak_vote",
+            override_aggregate.get("usable") is True,
+        ]
+    )
     output["ok"] = all(checks)
     print(json.dumps(output, ensure_ascii=False, indent=2))
     raise SystemExit(0 if output["ok"] else 1)

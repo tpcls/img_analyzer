@@ -1104,16 +1104,40 @@ class YouTubeFrameFetcher:
         analysis["lower_garment_model_average_confidence"] = model_average_confidence
         analysis["lower_garment_model_votes"] = dict(model_votes)
         model_assisted = False
+        model_override_reason = ""
+        model_enough_votes = sum(model_votes.values()) >= min(4, min_frames)
+        model_strong = (
+            model_label != "unknown"
+            and model_enough_votes
+            and model_vote_confidence >= 0.75
+            and model_average_confidence >= 0.60
+        )
         if analysis["lower_garment_known_frames"] < min(3, min_frames):
-            if sum(model_votes.values()) >= min(3, min_frames) and model_vote_confidence >= 0.67 and model_average_confidence >= 0.55:
+            if (
+                model_label != "unknown"
+                and sum(model_votes.values()) >= min(3, min_frames)
+                and model_vote_confidence >= 0.67
+                and model_average_confidence >= 0.55
+            ):
                 analysis["lower_garment"] = model_label
                 analysis["lower_garment_family"] = lower_garment_family(model_label)
                 analysis["pants_length"] = pants_length_for_label(model_label)
                 model_assisted = True
+                model_override_reason = "model_sparse_known"
             else:
                 analysis["lower_garment"] = "unknown"
                 analysis["lower_garment_family"] = "unknown"
                 analysis["pants_length"] = "unknown"
+        elif (
+            model_strong
+            and analysis["lower_garment_vote_confidence"] < 0.75
+            and model_label != analysis["lower_garment"]
+        ):
+            analysis["lower_garment"] = model_label
+            analysis["lower_garment_family"] = lower_garment_family(model_label)
+            analysis["pants_length"] = pants_length_for_label(model_label)
+            model_assisted = True
+            model_override_reason = "model_override_weak_vote"
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (
@@ -1125,7 +1149,7 @@ class YouTubeFrameFetcher:
         lower_garment_reason = (
             "all_unknown"
             if analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
-            else "model_sparse_known"
+            else model_override_reason
             if model_assisted
             else "sparse_known"
             if analysis["lower_garment_known_frames"] < min(4, min_frames)
