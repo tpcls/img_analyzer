@@ -1,0 +1,656 @@
+{
+  "classes": [
+    "mini_skirt",
+    "shorts"
+  ],
+  "eval": {
+    "accuracy_percent": 100.0,
+    "correct": 2,
+    "rows": [
+      {
+        "actual": "shorts",
+        "confidence": 0.934,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-10.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9892,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-10.jpg",
+        "ok": true
+      }
+    ],
+    "total": 2
+  },
+  "feature_names": [
+    "skin_ratio",
+    "upper_skin_ratio",
+    "lower_skin_ratio",
+    "lower_coverage_ratio",
+    "lower_split_ratio",
+    "lower_center_fill_ratio",
+    "person_confidence",
+    "color_confidence",
+    "lower_garment=unknown",
+    "lower_garment=shorts",
+    "lower_garment=mini_skirt",
+    "lower_garment=knee_length_pants",
+    "lower_garment=knee_length_skirt",
+    "lower_garment=cropped_pants",
+    "lower_garment=midi_skirt",
+    "lower_garment=long_pants",
+    "lower_garment=long_skirt",
+    "lower_garment_family=unknown",
+    "lower_garment_family=pants",
+    "lower_garment_family=skirt",
+    "pants_length=unknown",
+    "pants_length=shorts",
+    "pants_length=knee_length",
+    "pants_length=cropped",
+    "pants_length=long",
+    "exposure=low",
+    "exposure=medium",
+    "exposure=high",
+    "upper_color=unknown",
+    "upper_color=black",
+    "upper_color=white",
+    "upper_color=gray",
+    "upper_color=pink",
+    "upper_color=purple",
+    "upper_color=red",
+    "upper_color=orange",
+    "upper_color=blue",
+    "upper_color=green",
+    "lower_color=unknown",
+    "lower_color=black",
+    "lower_color=white",
+    "lower_color=gray",
+    "lower_color=pink",
+    "lower_color=purple",
+    "lower_color=red",
+    "lower_color=orange",
+    "lower_color=blue",
+    "lower_color=green"
+  ],
+  "means": [
+    0.20620961538461538,
+    0.20243653846153847,
+    0.2849788461538461,
+    0.9941019230769229,
+    0.03134038461538462,
+    0.9281096153846154,
+    0.4936153846153847,
+    0.5738057692307695,
+    0.0,
+    0.6346153846153846,
+    0.3076923076923077,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.057692307692307696,
+    0.0,
+    0.6346153846153846,
+    0.36538461538461536,
+    0.0,
+    0.9423076923076923,
+    0.0,
+    0.0,
+    0.057692307692307696,
+    0.23076923076923078,
+    0.7307692307692307,
+    0.038461538461538464,
+    0.0,
+    0.75,
+    0.057692307692307696,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.1346153846153846,
+    0.0,
+    0.0,
+    0.6538461538461539,
+    0.19230769230769232,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.1346153846153846,
+    0.019230769230769232
+  ],
+  "scales": [
+    0.10794259204213666,
+    0.12576275746396798,
+    0.10227830497177498,
+    0.03677839818731712,
+    0.0714480614465323,
+    0.14778536184878097,
+    0.07449629671904555,
+    0.0599810399961827,
+    1.0,
+    0.4815378471364967,
+    0.4615384615384615,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.233160685634272,
+    1.0,
+    0.4815378471364967,
+    0.48153784713649667,
+    1.0,
+    0.233160685634272,
+    1.0,
+    1.0,
+    0.233160685634272,
+    0.42132504423474304,
+    0.4435600997950306,
+    0.19230769230769237,
+    1.0,
+    0.4330127018922193,
+    0.2331606856342721,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.341312295178824,
+    1.0,
+    1.0,
+    0.47574295680203776,
+    0.394113490998446,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.341312295178824,
+    0.13733516208736252
+  ],
+  "source": "golden cached frames",
+  "temperature": 2.5,
+  "train_eval": {
+    "accuracy_percent": 100.0,
+    "correct": 52,
+    "rows": [
+      {
+        "actual": "shorts",
+        "confidence": 0.9359,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-120.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9081,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-15.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9354,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-20.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9076,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-30.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9348,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-45.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9073,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-5.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9351,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-60.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9348,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-75.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9347,
+        "expected": "shorts",
+        "file": "youtube-only-2f768026e3f1a749b5a65e02e121f37a66319b20-90.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9063,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-10.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9067,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-15.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9204,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-20.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9213,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-30.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9346,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-45.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9231,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-5.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9133,
+        "expected": "shorts",
+        "file": "youtube-only-5ec6f47c7ece04513483cd312af2c916501a45b1-60.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9812,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-15.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9713,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-20.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9812,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-30.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9722,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-45.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9893,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-5.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9712,
+        "expected": "mini_skirt",
+        "file": "youtube-only-7b61c781f17c2095badee0dbe0a437fec4ca7473-60.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9572,
+        "expected": "mini_skirt",
+        "file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-120.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9523,
+        "expected": "mini_skirt",
+        "file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-75.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9184,
+        "expected": "mini_skirt",
+        "file": "youtube-only-8b48fea6f43bef22ba900f211ef12ce4cc8d98cb-90.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9063,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-10.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9071,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-15.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9063,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-20.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9069,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-30.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9066,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-45.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9065,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-5.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9056,
+        "expected": "shorts",
+        "file": "youtube-only-abd7f765da62512b404bb22993fe4b2e1a517451-60.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9285,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-10.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9283,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-120.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9623,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-15.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9279,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-20.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9622,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-30.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9306,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-45.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9622,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-5.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9318,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-60.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9285,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-75.jpg",
+        "ok": true
+      },
+      {
+        "actual": "mini_skirt",
+        "confidence": 0.9283,
+        "expected": "mini_skirt",
+        "file": "youtube-only-cb661687647ad85aeb454de945079c5f2bbb77a9-90.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9332,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-10.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.929,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-120.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9057,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-15.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9296,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-20.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9053,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-30.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9276,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-45.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9227,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-5.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9278,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-60.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.929,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-75.jpg",
+        "ok": true
+      },
+      {
+        "actual": "shorts",
+        "confidence": 0.9292,
+        "expected": "shorts",
+        "file": "youtube-only-d6e35cca84882bd260a1c16d1412d9edc9b9290d-90.jpg",
+        "ok": true
+      }
+    ],
+    "total": 52
+  },
+  "training_samples": 52,
+  "version": 1,
+  "weights": [
+    [
+      -0.5161853925028945,
+      0.023893137713560626,
+      0.18220235908104337,
+      -0.25830662704435003,
+      -0.06948631009241939,
+      -0.04156454931633037,
+      0.04788828169269643,
+      0.1980495059036303,
+      0.07973986197118026,
+      0.0,
+      -0.7018080092794604,
+      0.649998016649709,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.16275485372156198,
+      0.0,
+      -0.7018080092794604,
+      0.7018080092794604,
+      0.0,
+      -0.16275485372156204,
+      0.0,
+      0.0,
+      0.16275485372156198,
+      0.03788937498325648,
+      -0.09395422330559115,
+      0.13369513078867595,
+      0.0,
+      -0.06960054606145646,
+      0.13194487948189434,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.10407981747924369,
+      0.0,
+      0.0,
+      -0.02528018093588106,
+      0.08225508383662396,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.10407981747924369,
+      0.11018846841067773
+    ],
+    [
+      0.5161853925028943,
+      -0.023893137713560716,
+      -0.1822023590810435,
+      0.2583066270443498,
+      0.06948631009241926,
+      0.041564549316330426,
+      -0.047888281692696454,
+      -0.19804950590362994,
+      -0.07973986197118037,
+      0.0,
+      0.7018080092794607,
+      -0.6499980166497089,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      -0.16275485372156195,
+      0.0,
+      0.7018080092794607,
+      -0.7018080092794607,
+      0.0,
+      0.16275485372156195,
+      0.0,
+      0.0,
+      -0.16275485372156195,
+      -0.03788937498325638,
+      0.093954223305591,
+      -0.133695130788676,
+      0.0,
+      0.06960054606145646,
+      -0.13194487948189418,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.10407981747924372,
+      0.0,
+      0.0,
+      0.025280180935881053,
+      -0.08225508383662389,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.10407981747924372,
+      -0.1101884684106778
+    ]
+  ]
+}

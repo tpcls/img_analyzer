@@ -147,6 +147,7 @@ curl -X POST http://localhost:8000/analyze \
 - `STREAM_FRAME_FORMAT`: 스트림 프레임 저장 형식. `ppm`이면 변환 없이 C 모델에 바로 넣습니다. 기본값 `ppm`
 - `STREAM_FRAME_WORKERS`: 스트림 프레임을 병렬 추출할 ffmpeg 작업 수. 기본값 `4`, 저사양이면 `1`
 - `AUTO_SAMPLE_WEAK_VOTE`: `1`이면 하의 투표가 약할 때 75/90/120초 프레임을 추가 수집합니다. 기본값 `0`
+- `LOWER_GARMENT_MODEL`: 작은 하의 보조 모델 JSON 경로. 기본값 `lower_garment_model.json`, `0`이면 비활성화
 - `INCLUDE_THUMBNAIL`: `1`이면 서버 응답에 썸네일 다운로드 결과를 포함합니다. 기본값은 제외
 - `INCLUDE_THUMBNAIL_ANALYSIS`: `1`이면 썸네일 의상 분석을 포함합니다. 기본값은 제외
 - `SERV_API_API`: 설정하면 `/analyze` 요청에 `x-api-key` 헤더가 필요합니다.
@@ -189,6 +190,14 @@ curl -X POST http://localhost:8000/analyze \
 이 명령은 `eval_outputs/lower_garment_audit.jpg`와 `eval_outputs/lower_garment_audit.json`을 생성합니다.
 
 CI/로컬 게이트로는 `golden_clothing_eval.py`를 사용합니다. 이 평가는 하의 세부 라벨 정확도와 `pants/skirt` family 정확도, 그리고 family 다수결 신뢰도가 모두 목표치 이상인지 확인합니다.
+
+작은 하의 보조 모델을 다시 학습하려면:
+
+```bash
+.venv/bin/python train_lower_garment_model.py --analysis-width 384
+```
+
+모델은 C 분석 결과의 수치/카테고리 특징을 입력으로 쓰는 초소형 softmax 모델입니다. 결과는 `lower_garment_model.json`에 저장되고, API 응답의 `lower_garment_decision`에 `model_label`, `model_confidence`, `model_votes`로 함께 반환됩니다.
 
 검색 기반 실행은 제목에 쿼리 인물/그룹 키워드가 없는 YouTube 결과를 버립니다. `search_filter_eval.py`는 `IVE Wonyoung` 검색에 트와이스 정연 영상이 섞이는 회귀 케이스를 막는 테스트입니다.
 

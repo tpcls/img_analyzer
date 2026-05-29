@@ -3,30 +3,41 @@ import json
 from youtube_frame_fetcher import YouTubeFrameFetcher
 
 
-def frame_item(second, lower_garment="unknown", lower_garment_family="unknown", pants_length="unknown"):
+def frame_item(
+    second,
+    lower_garment="unknown",
+    lower_garment_family="unknown",
+    pants_length="unknown",
+    model_label=None,
+    model_confidence=None,
+):
+    analysis = {
+        "upper_color": "purple",
+        "lower_color": "purple",
+        "lower_garment": lower_garment,
+        "lower_garment_family": lower_garment_family,
+        "pants_length": pants_length,
+        "exposure": "medium",
+        "skin_ratio": 0.16,
+        "upper_skin_ratio": 0.18,
+        "lower_skin_ratio": 0.12,
+        "lower_coverage_ratio": 0.40,
+        "lower_split_ratio": 0.0,
+        "lower_center_fill_ratio": 0.0,
+        "person_confidence": 0.50,
+        "color_confidence": 0.45,
+        "analysis_quality": "medium",
+        "color_quality": "medium",
+    }
+    if model_label is not None:
+        analysis["lower_garment_model_label"] = model_label
+        analysis["lower_garment_model_confidence"] = model_confidence if model_confidence is not None else 0.80
     return {
         "second": second,
         "frame": {"file_path": f"mock-{second}.jpg"},
         "result": {
             "ok": True,
-            "analysis": {
-                "upper_color": "purple",
-                "lower_color": "purple",
-                "lower_garment": lower_garment,
-                "lower_garment_family": lower_garment_family,
-                "pants_length": pants_length,
-                "exposure": "medium",
-                "skin_ratio": 0.16,
-                "upper_skin_ratio": 0.18,
-                "lower_skin_ratio": 0.12,
-                "lower_coverage_ratio": 0.40,
-                "lower_split_ratio": 0.0,
-                "lower_center_fill_ratio": 0.0,
-                "person_confidence": 0.50,
-                "color_confidence": 0.45,
-                "analysis_quality": "medium",
-                "color_quality": "medium",
-            },
+            "analysis": analysis,
         },
     }
 
@@ -108,6 +119,27 @@ def main():
             sparse_output["usable"] is False,
             sparse_output["decision"].get("reason") == "sparse_known",
             any("only 3 voted frames" in warning for warning in sparse_output["warnings"]),
+        ]
+    )
+    model_frames = [
+        frame_item(second, model_label="mini_skirt", model_confidence=0.80)
+        for second in (5, 10, 15, 20, 30, 45, 60)
+    ]
+    model_aggregate = fetcher.aggregate_clothing_results(model_frames, min_frames=7)
+    model_analysis = (model_aggregate.get("result") or {}).get("analysis") or {}
+    model_decision = model_aggregate.get("lower_garment_decision", {})
+    output["model_sparse"] = {
+        "usable": model_aggregate.get("usable"),
+        "decision": model_decision,
+        "analysis": model_analysis,
+    }
+    checks.extend(
+        [
+            model_analysis.get("lower_garment") == "mini_skirt",
+            model_analysis.get("lower_garment_family") == "skirt",
+            model_decision.get("model_assisted") is True,
+            model_decision.get("reason") == "model_sparse_known",
+            model_aggregate.get("usable") is False,
         ]
     )
     output["ok"] = all(checks)

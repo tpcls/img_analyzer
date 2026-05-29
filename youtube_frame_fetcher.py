@@ -13,6 +13,8 @@ from pathlib import Path
 
 import requests
 
+from lower_garment_model import load_model, lower_garment_family, pants_length_for_label, predict as predict_lower_garment
+
 
 class YouTubeFrameFetcher:
     def __init__(self, analysis_width=384):
@@ -38,6 +40,10 @@ class YouTubeFrameFetcher:
             self.stream_frame_format = "ppm"
         self.stream_frame_workers = max(1, int(os.environ.get("STREAM_FRAME_WORKERS", "4")))
         self.auto_sample_weak_vote = os.environ.get("AUTO_SAMPLE_WEAK_VOTE", "0") == "1"
+        self.lower_garment_model = None
+        model_path = os.environ.get("LOWER_GARMENT_MODEL", str(self.base_dir / "lower_garment_model.json"))
+        if model_path and model_path != "0":
+            self.lower_garment_model = load_model(model_path)
         self.yt_dlp_upgrade_interval_seconds = int(
             float(os.environ.get("YT_DLP_UPGRADE_INTERVAL_HOURS", "24")) * 60 * 60
         )
@@ -889,6 +895,15 @@ class YouTubeFrameFetcher:
             analyses = [analyses]
         return {"ok": True, "analyses": analyses}
 
+    def attach_lower_garment_model_prediction(self, analysis):
+        if not self.lower_garment_model:
+            return analysis
+        prediction = predict_lower_garment(self.lower_garment_model, analysis)
+        analysis["lower_garment_model_label"] = prediction["label"]
+        analysis["lower_garment_model_confidence"] = prediction["confidence"]
+        analysis["lower_garment_model_probabilities"] = prediction["probabilities"]
+        return analysis
+
     def clothing_result_score(self, item):
         analysis = item["result"].get("analysis", {})
         person_confidence = float(analysis.get("person_confidence", 0.0))
@@ -1067,10 +1082,38 @@ class YouTubeFrameFetcher:
         analysis["lower_garment_family_unknown_frames"] = unknown_counts["lower_garment_family"]
         analysis["lower_garment_known_frames"] = len(selected) - unknown_counts["lower_garment"]
         analysis["lower_garment_family_known_frames"] = len(selected) - unknown_counts["lower_garment_family"]
+        model_votes = Counter()
+        model_confidence_sum = Counter()
+        for entry in selected:
+            label = entry["analysis"].get("lower_garment_model_label")
+            confidence = float(entry["analysis"].get("lower_garment_model_confidence", 0.0) or 0.0)
+            if not label or confidence < 0.45:
+                continue
+            model_votes[label] += 1
+            model_confidence_sum[label] += confidence
+        model_label = "unknown"
+        model_vote_confidence = 0.0
+        model_average_confidence = 0.0
+        if model_votes:
+            model_label = max(model_votes, key=lambda value: (model_votes[value], model_confidence_sum[value]))
+            model_total = sum(model_votes.values())
+            model_vote_confidence = round(model_votes[model_label] / model_total, 4)
+            model_average_confidence = round(model_confidence_sum[model_label] / model_votes[model_label], 4)
+        analysis["lower_garment_model_vote"] = model_label
+        analysis["lower_garment_model_vote_confidence"] = model_vote_confidence
+        analysis["lower_garment_model_average_confidence"] = model_average_confidence
+        analysis["lower_garment_model_votes"] = dict(model_votes)
+        model_assisted = False
         if analysis["lower_garment_known_frames"] < min(3, min_frames):
-            analysis["lower_garment"] = "unknown"
-            analysis["lower_garment_family"] = "unknown"
-            analysis["pants_length"] = "unknown"
+            if sum(model_votes.values()) >= min(3, min_frames) and model_vote_confidence >= 0.67 and model_average_confidence >= 0.55:
+                analysis["lower_garment"] = model_label
+                analysis["lower_garment_family"] = lower_garment_family(model_label)
+                analysis["pants_length"] = pants_length_for_label(model_label)
+                model_assisted = True
+            else:
+                analysis["lower_garment"] = "unknown"
+                analysis["lower_garment_family"] = "unknown"
+                analysis["pants_length"] = "unknown"
         analysis["person_confidence"] = numeric_mean("person_confidence")
         analysis["color_confidence"] = numeric_mean("color_confidence")
         analysis["analysis_quality"] = (
@@ -1082,6 +1125,8 @@ class YouTubeFrameFetcher:
         lower_garment_reason = (
             "all_unknown"
             if analysis["lower_garment"] == "unknown" and unknown_counts["lower_garment"] >= len(selected)
+            else "model_sparse_known"
+            if model_assisted
             else "sparse_known"
             if analysis["lower_garment_known_frames"] < min(4, min_frames)
             else "weak_vote"
@@ -1099,6 +1144,11 @@ class YouTubeFrameFetcher:
             "family_votes": votes["lower_garment_family"],
             "known_frames": analysis["lower_garment_known_frames"],
             "family_known_frames": analysis["lower_garment_family_known_frames"],
+            "model_label": model_label,
+            "model_confidence": model_vote_confidence,
+            "model_average_confidence": model_average_confidence,
+            "model_votes": dict(model_votes),
+            "model_assisted": model_assisted,
             "needs_review": analysis["lower_garment_vote_confidence"] < 0.75,
             "reason": lower_garment_reason,
         }
@@ -1186,6 +1236,7 @@ class YouTubeFrameFetcher:
             batch = self.run_c_model_batch([ppm["ppm_path"] for _, ppm in prepared])
             if batch.get("ok"):
                 for (frame, ppm), analysis in zip(prepared, batch["analyses"]):
+                    self.attach_lower_garment_model_prediction(analysis)
                     results.append(
                         {
                             "second": frame["second"],
